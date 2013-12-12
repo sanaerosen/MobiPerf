@@ -83,6 +83,7 @@ public class RRCTask extends MeasurementTask {
   private Context context;
 
   public static class RRCDesc extends MeasurementDesc {
+
     private static String HOST = "www.google.com";
 
     // Default echo server name and port to measure the RTT to infer RRC state
@@ -111,6 +112,7 @@ public class RRCTask extends MeasurementTask {
     boolean HTTP = true;
     boolean RRC = true;
     boolean SIZES = true;
+    boolean FINEGRAINED = true;
 
     // Whether RRC result is visible to users
     public boolean RESULT_VISIBILITY = false;
@@ -297,6 +299,11 @@ public class RRCTask extends MeasurementTask {
         Logger.d("param: RRC " + this.RRC);
         if ((val = params.get("measure_sizes")) != null && val.length() > 0) {
           this.SIZES = Boolean.parseBoolean(val);
+        }
+        Logger.d("param: SIZES " + this.SIZES);
+        // Whether or not to run the fine grained inference task
+        if ((val = params.get("finegrained")) != null && val.length() > 0) {
+          this.FINEGRAINED = Boolean.parseBoolean(val);
         }
         Logger.d("param: SIZES " + this.SIZES);
         // Whether the RRC result is visible to users
@@ -820,6 +827,11 @@ public class RRCTask extends MeasurementTask {
           runSizeThresholdTest(desc.times, desc, data, utils, desc.testId);
           checkin.uploadRrcInferenceSizeData(data);
         }
+        
+        if (desc.FINEGRAINED) {
+          Logger.w("Start fine grained inference task");
+          runLteFineGrainedInference();
+        }
       }
 
       this.progress = Math.min(Config.MAX_PROGRESS_BAR_VALUE, 100);
@@ -946,7 +958,8 @@ public class RRCTask extends MeasurementTask {
           HttpClient client = new DefaultHttpClient();
           HttpGet request = new HttpGet();
 
-          request.setURI(new URI("http://" + desc.target+"?dummy="+i + "" +j));
+          request.setURI(new URI("http://" + desc.target + "?dummy=" + i + ""
+              + j));
 
           HttpResponse response = client.execute(request);
           endTime = System.currentTimeMillis();
@@ -966,7 +979,7 @@ public class RRCTask extends MeasurementTask {
           // not really accurate
           if (!packetmonitor.isTrafficInterfering(100, 100)) {
             break;
-          } 
+          }
           startTime = 0;
           endTime = 0;
 
@@ -1133,7 +1146,7 @@ public class RRCTask extends MeasurementTask {
 
           // Create a random URL, to avoid the caching problem
           UUID uuid = UUID.randomUUID();
-          ///String host = uuid.toString() + ".com";
+          // /String host = uuid.toString() + ".com";
           serverAddr = InetAddress.getByName(desc.target);
           // three-way handshake done when socket created
           Socket socket = new Socket(serverAddr, 80);
@@ -1164,6 +1177,41 @@ public class RRCTask extends MeasurementTask {
       e.printStackTrace();
     } catch (IOException e) {
       e.printStackTrace();
+    }
+  }
+
+  private void runLteFineGrainedInference() {
+    // TODO begin and end tcpdump
+    // TODO when on wifi, send data and delete
+    for (int j = 0; j < 5; j++) {
+      // for (int i = 0; i < 3000; i += 100) {
+      for (int i = 1000; i < 4000; i += 50) {
+        try {
+
+          byte[] buf = new byte[0];
+          byte[] rcvBuf = new byte[0];
+
+          InetAddress serverAddr = InetAddress.getByName("ep2.eecs.umich.edu");
+
+          DatagramSocket socket = new DatagramSocket();
+          DatagramPacket packetRcv = new DatagramPacket(rcvBuf, rcvBuf.length);
+
+          DatagramPacket packet =
+              new DatagramPacket(buf, buf.length, serverAddr, 50000);
+
+          try {
+            socket.setSoTimeout(7000);
+
+            socket.send(packet);
+            socket.receive(packetRcv);
+          } catch (SocketTimeoutException e) {
+            socket.close();
+          }
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+
+      }
     }
   }
 
