@@ -59,6 +59,7 @@ import com.mobiperf.MeasurementTask;
 import com.mobiperf.RRCTrafficControl;
 import com.mobiperf.util.MeasurementJsonConvertor;
 import com.mobiperf.util.PhoneUtils;
+import com.mobiperf.util.TcpDumpWrapper;
 
 
 /**
@@ -827,7 +828,7 @@ public class RRCTask extends MeasurementTask {
           runSizeThresholdTest(desc.times, desc, data, utils, desc.testId);
           checkin.uploadRrcInferenceSizeData(data);
         }
-        
+
         if (desc.FINEGRAINED) {
           Logger.w("Start fine grained inference task");
           runLteFineGrainedInference();
@@ -1145,8 +1146,6 @@ public class RRCTask extends MeasurementTask {
           startTime = System.currentTimeMillis();
 
           // Create a random URL, to avoid the caching problem
-          UUID uuid = UUID.randomUUID();
-          // /String host = uuid.toString() + ".com";
           serverAddr = InetAddress.getByName(desc.target);
           // three-way handshake done when socket created
           Socket socket = new Socket(serverAddr, 80);
@@ -1180,38 +1179,63 @@ public class RRCTask extends MeasurementTask {
     }
   }
 
+  /**
+   * Getting the fine grained timers for LTE is challenging because the amount of delay from sending
+   * packets at this level and then measuring them can exceed the length of the actual timer.
+   * Instead, we basically send packets at the approximate interval given, which hopefully results
+   * in a more or less even spray of packets.
+   * 
+   * We log these in tcpdump and then calculate the time between packets after the fact. This
+   * requires root, and has more overhead in terms of overhead and storage, hence why we only deploy
+   * it locally.
+   */
   private void runLteFineGrainedInference() {
-    // TODO begin and end tcpdump
+    TcpDumpWrapper tcpdump = new TcpDumpWrapper(context);
+
     // TODO when on wifi, send data and delete
-    for (int j = 0; j < 5; j++) {
-      // for (int i = 0; i < 3000; i += 100) {
-      for (int i = 1000; i < 4000; i += 50) {
-        try {
 
-          byte[] buf = new byte[0];
-          byte[] rcvBuf = new byte[0];
+    boolean success = tcpdump.checkOrInstallTcpdump();
+    if (!success) {
+      Logger.e("Failed to install tcpdump, exiting");
+      return;
+    }
+    try {
+      
+      tcpdump.startTcpDump();
 
-          InetAddress serverAddr = InetAddress.getByName("ep2.eecs.umich.edu");
-
-          DatagramSocket socket = new DatagramSocket();
-          DatagramPacket packetRcv = new DatagramPacket(rcvBuf, rcvBuf.length);
-
-          DatagramPacket packet =
-              new DatagramPacket(buf, buf.length, serverAddr, 50000);
-
+      for (int j = 0; j < 5; j++) {
+        // for (int i = 0; i < 3000; i += 100) {
+        for (int i = 1000; i < 4000; i += 50) {
           try {
-            socket.setSoTimeout(7000);
 
-            socket.send(packet);
-            socket.receive(packetRcv);
-          } catch (SocketTimeoutException e) {
-            socket.close();
+            byte[] buf = new byte[0];
+            byte[] rcvBuf = new byte[0];
+
+            InetAddress serverAddr =
+                InetAddress.getByName("ep2.eecs.umich.edu");
+
+            DatagramSocket socket = new DatagramSocket();
+            DatagramPacket packetRcv =
+                new DatagramPacket(rcvBuf, rcvBuf.length);
+
+            DatagramPacket packet =
+                new DatagramPacket(buf, buf.length, serverAddr, 50000);
+
+            try {
+              socket.setSoTimeout(7000);
+
+              socket.send(packet);
+              socket.receive(packetRcv);
+            } catch (SocketTimeoutException e) {
+              socket.close();
+            }
+          } catch (IOException e) {
+            e.printStackTrace();
           }
-        } catch (IOException e) {
-          e.printStackTrace();
         }
-
       }
+    } finally {
+      tcpdump.stopTcpDump();
     }
   }
 
@@ -1597,4 +1621,5 @@ public class RRCTask extends MeasurementTask {
       }
     }
   }
+
 }
