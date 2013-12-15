@@ -2,10 +2,15 @@ package com.mobiperf.util;
 
 import java.io.DataOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.SocketException;
+
+import org.apache.commons.net.ftp.FTP;
+import org.apache.commons.net.ftp.FTPClient;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -15,6 +20,7 @@ import android.net.NetworkInfo;
 import android.os.Environment;
 import android.preference.PreferenceManager;
 
+import com.mobiperf.ConfigPrivate;
 import com.mobiperf.Logger;
 
 /**
@@ -32,6 +38,10 @@ public class TcpDumpWrapper {
     this.context = context;
   }
 
+  /**
+   * Check if the SD card is mounted.
+   * @return
+   */
   private static File checkMounted() {
 
     String state = Environment.getExternalStorageState();
@@ -47,7 +57,11 @@ public class TcpDumpWrapper {
     return rootfile;
 
   }
-
+/**
+ * Check if a file is on the SD card.  REturn it if so.
+ * @param file
+ * @return
+ */
   private static File checkSdCardFile(String file) {
     File rootfile = checkMounted();
     if (rootfile == null) {
@@ -58,6 +72,12 @@ public class TcpDumpWrapper {
     return logfile;
   }
 
+  /**
+   * Check if a file is on the SD card.  If not, create it. Then, return the file.
+   * 
+   * @param directory
+   * @return
+   */
   private static File checkOrCreateFile(String directory) {
     File rootfile = checkMounted();
     if (rootfile == null) {
@@ -159,29 +179,89 @@ public class TcpDumpWrapper {
     return true;
   }
   
-  public boolean doIUpload() {
+  private File[] getFileList() {
+
+    File sdcard = new File(Environment.getExternalStorageDirectory().getPath());
+    File[] files = sdcard.listFiles();
+    return files;
     
-    
-    // Step 1: is there anything to upload
-    // Step 2: are we on wifi and is the time good
-    long time = System.currentTimeMillis();
+  }
+  
+  
+  public void upload() {
+    // check if uploaded recently, if not cancel.
     SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
     long last_uploaded = preferences.getLong("last_uploaded", 0);
-
-    if (time > last_uploaded + 43200000) {
-
-      ConnectivityManager cm = (ConnectivityManager) context.getSystemService(context.CONNECTIVITY_SERVICE);
-      NetworkInfo netInfo = cm.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
-
-      if (netInfo.isConnected()) {
-              last_uploaded = time;
-              SharedPreferences.Editor editor = preferences.edit();
-              editor.putLong("last_uploaded", time);
-              editor.commit();
-              return true;
-      } 
+    long time = System.currentTimeMillis();
+    if (time < last_uploaded + 43200000) {
+      Logger.w("Uploaded too recently, cancel upload");
+      return;
     }
-    return false;
     
+    // Check if there is anything to upload, if not cancel.
+    File[] file_list = getFileList();
+    if (file_list.length == 0) {
+      Logger.w("No files to upload, cancel upload");
+      return;
     }
+    
+    // Check if we are on WiFi, if not cancel.
+
+    ConnectivityManager cm = (ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE);
+    NetworkInfo netInfo = cm.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
+
+    if (!netInfo.isConnected()) {
+      Logger.w("No wifi, upload later");
+      return;
+    } 
+    
+
+    
+    
+   // Iterate through files, upload and delete
+   try {
+     FTPClient ftp = new FTPClient();  
+    ftp.connect(ConfigPrivate.ftp_server, 21);
+    ftp.login(ConfigPrivate.ftp_username, ConfigPrivate.ftp_password);
+    ftp.setFileType(FTP.BINARY_FILE_TYPE);
+    ftp.enterLocalPassiveMode();
+    
+    for (File uploadme: file_list) {
+      netInfo = cm.getNetworkInfo(ConnectivityManager.TYPE_WIFI);
+      if (!netInfo.isConnected()) {
+        Logger.w("Wifi stopped, upload some other time");
+        ftp.disconnect();
+        return;
+      } 
+      
+      FileInputStream in =
+          new FileInputStream(uploadme);
+      boolean success = ftp.storeFile(uploadme.getName(), in);
+      in.close();
+      if (success) {
+        uploadme.delete();
+      }      
+    }
+    ftp.disconnect();
+  
+    // Indicate the last time an upload happened
+    setUploaded();
+    
+    } catch (SocketException e) {
+      e.printStackTrace();
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+  }
+  
+  /**
+   * On a successful upload, record the last uploaded time
+   */
+  public void setUploaded() {
+    long time = System.currentTimeMillis();
+    SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+    SharedPreferences.Editor editor = preferences.edit();
+    editor.putLong("last_uploaded", time);
+    editor.commit();    
+  }
 }
