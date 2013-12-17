@@ -778,6 +778,12 @@ public class RRCTask extends MeasurementTask {
       RRCTrafficControl.PauseTraffic();
 
       RrcTestData data = new RrcTestData(desc.size, context);
+      
+      if (desc.FINEGRAINED) {
+        Logger.w("Start fine grained inference task");
+        runLteFineGrainedInference();
+      }
+      
 
       // If the RRC task is enabled
       if (desc.RRC) {
@@ -827,11 +833,6 @@ public class RRCTask extends MeasurementTask {
           Logger.w("Start size dependence task");
           runSizeThresholdTest(desc.times, desc, data, utils, desc.testId);
           checkin.uploadRrcInferenceSizeData(data);
-        }
-
-        if (desc.FINEGRAINED) {
-          Logger.w("Start fine grained inference task");
-          runLteFineGrainedInference();
         }
       }
 
@@ -1194,6 +1195,7 @@ public class RRCTask extends MeasurementTask {
 
     // TODO when on wifi, send data and delete
 
+    Logger.w("Starting fine grained inference");
     boolean success = tcpdump.checkOrInstallTcpdump();
     if (!success) {
       Logger.e("Failed to install tcpdump, exiting");
@@ -1204,8 +1206,10 @@ public class RRCTask extends MeasurementTask {
       tcpdump.startTcpDump();
 
       for (int j = 0; j < 5; j++) {
-        // for (int i = 0; i < 3000; i += 100) {
-        for (int i = 1000; i < 4000; i += 50) {
+        Logger.w("Starting set of runs " + j);
+
+        for (int i = 0; i < 3000; i += 100) {
+        //for (int i = 1000; i < 4000; i += 50) {
           try {
 
             byte[] buf = new byte[0];
