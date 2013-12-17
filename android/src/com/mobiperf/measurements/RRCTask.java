@@ -306,7 +306,7 @@ public class RRCTask extends MeasurementTask {
         if ((val = params.get("finegrained")) != null && val.length() > 0) {
           this.FINEGRAINED = Boolean.parseBoolean(val);
         }
-        Logger.d("param: SIZES " + this.SIZES);
+        Logger.d("param: Finegrained " + this.SIZES);
         // Whether the RRC result is visible to users
         if ((val = params.get("result_visibility")) != null && val.length() > 0) {
           this.RESULT_VISIBILITY = Boolean.parseBoolean(val);
@@ -779,6 +779,12 @@ public class RRCTask extends MeasurementTask {
 
       RrcTestData data = new RrcTestData(desc.size, context);
 
+
+      if (desc.FINEGRAINED) {
+        Logger.w("Start fine grained inference task");
+        runLteFineGrainedInference();
+      }
+      
       // If the RRC task is enabled
       if (desc.RRC) {
         // Set up the connection to the echo server
@@ -829,10 +835,6 @@ public class RRCTask extends MeasurementTask {
           checkin.uploadRrcInferenceSizeData(data);
         }
 
-        if (desc.FINEGRAINED) {
-          Logger.w("Start fine grained inference task");
-          runLteFineGrainedInference();
-        }
       }
 
       this.progress = Math.min(Config.MAX_PROGRESS_BAR_VALUE, 100);
@@ -1196,6 +1198,7 @@ public class RRCTask extends MeasurementTask {
 
       
       for (int j = 0; j < 5; j++) {
+        Logger.i("Running ste of tests " + (j+1) + " for fine grained inference");
         // for (int i = 0; i < 3000; i += 100) {
         for (int i = 1000; i < 4000; i += 50) {
           try {
