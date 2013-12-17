@@ -1190,19 +1190,11 @@ public class RRCTask extends MeasurementTask {
    * it locally.
    */
   private void runLteFineGrainedInference() {
-    TcpDumpWrapper tcpdump = new TcpDumpWrapper(context);
 
     // TODO when on wifi, send data and delete
 
-    boolean success = tcpdump.checkOrInstallTcpdump();
-    if (!success) {
-      Logger.e("Failed to install tcpdump, exiting");
-      return;
-    }
-    try {
-      
-      tcpdump.startTcpDump();
 
+      
       for (int j = 0; j < 5; j++) {
         // for (int i = 0; i < 3000; i += 100) {
         for (int i = 1000; i < 4000; i += 50) {
@@ -1234,9 +1226,6 @@ public class RRCTask extends MeasurementTask {
           }
         }
       }
-    } finally {
-      tcpdump.stopTcpDump();
-    }
   }
 
   /**
