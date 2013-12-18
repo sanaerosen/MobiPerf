@@ -46,11 +46,13 @@ public class TcpDumpWrapper {
 
     String state = Environment.getExternalStorageState();
     if (!Environment.MEDIA_MOUNTED.equals(state)) {
+      Logger.w("State is" + state);
       Logger.w("NOT MOUNTED RETURNING NULL");
       return null; // can't write to sd.
     }
     File rootfile = Environment.getExternalStorageDirectory();
     if (!rootfile.canWrite()) {
+      Logger.w("Can't write to external storage");
       Logger.w("NOT MOUNTED RETURNING NULL");
       return null;
     }
@@ -95,35 +97,45 @@ public class TcpDumpWrapper {
 
   public void startTcpDump() {
 
-    if (checkSdCardFile("/download/") == null) {
-      return;
-    }
-    new Thread(new Runnable() {
+        
 
-      @Override
-      public void run() {
+        Logger.w("Tcpdump starting");
         String sdcard = Environment.getExternalStorageDirectory().getPath();
         String filename =
             "rrc_inference" + System.currentTimeMillis() + ".pcap";
         try {
           process = Runtime.getRuntime().exec("su");
           DataOutputStream os = new DataOutputStream(process.getOutputStream());
-          os.writeBytes("/data/imap-tcpdump -vv -s 0 > " + sdcard
-              + "/download/" + filename + "\n");
+          os.writeBytes("/data/local/imap-tcpdump ");
+          		//" > " + sdcard
+              //+ "/download/" + filename + "\n");
+
+          //Logger.w("Writing file to " + sdcard + "/download/" + filename);
           os.flush();
+          try {
+            Thread.sleep(3000);
+          } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+          }
 
         } catch (IOException e) {
           // TODO Auto-generated catch block
           e.printStackTrace();
         }
-      }
-    }).start();
   }
 
   public void stopTcpDump() {
-    if (process != null) {
-      process.destroy();
-    }
+        try {
+          Thread.sleep(10000);
+        } catch (InterruptedException e) {
+          // TODO Auto-generated catch block
+          e.printStackTrace();
+        }
+        Logger.w("Tcpdump stopping");
+        if (process != null) {
+          process.destroy();
+        }
   }
 
   /**
@@ -134,8 +146,9 @@ public class TcpDumpWrapper {
    */
   public boolean checkOrInstallTcpdump() {;
     // Check if the file is installed. If so, we're done.
-    File tcpdump = new File("/data/", "imap-tcpdump");
-    if (!tcpdump.exists()) {
+    File tcpdump = new File("/data/local/", "imap-tcpdump");
+    if (tcpdump.exists()) {
+      Logger.w("tcpdump exists");
       return true;
     }
     
@@ -145,6 +158,7 @@ public class TcpDumpWrapper {
       checkOrCreateFile("/traces/"); // for storing the traces
       File result = checkOrCreateFile("/download/");
       if (result == null) {
+        Logger.w("Failed to install due to not creating download folder");
         return false; // Failure
       }
 
@@ -161,6 +175,7 @@ public class TcpDumpWrapper {
       out.flush();
       out.close();
       iwconfig.close();
+      Logger.w("Successfully saved imap-tcpdump");
     } catch (IOException e) {
       e.printStackTrace();
       return false;
@@ -168,9 +183,11 @@ public class TcpDumpWrapper {
     try {
       Process process = Runtime.getRuntime().exec("su");
       DataOutputStream os = new DataOutputStream(process.getOutputStream());
-      os.writeBytes("cp /sdcard/download/iwconfig /data/\n");
+      os.writeBytes("cp /sdcard/download/imap-tcpdump /data/local/\n");
+      os.writeBytes("chmod 777 /data/local/imap-tcpdump\n");
       os.flush();
 
+      Logger.w("Successfully copied imap-tcpdump, probably");
     } catch (IOException e) {
 
       e.printStackTrace();
@@ -191,6 +208,7 @@ public class TcpDumpWrapper {
   public void upload() {
     // check if uploaded recently, if not cancel.
     SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(context);
+    Logger.w("Going to upload files");
     long last_uploaded = preferences.getLong("last_uploaded", 0);
     long time = System.currentTimeMillis();
     if (time < last_uploaded + 43200000) {

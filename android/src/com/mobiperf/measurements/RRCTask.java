@@ -59,7 +59,6 @@ import com.mobiperf.MeasurementTask;
 import com.mobiperf.RRCTrafficControl;
 import com.mobiperf.util.MeasurementJsonConvertor;
 import com.mobiperf.util.PhoneUtils;
-import com.mobiperf.util.TcpDumpWrapper;
 
 
 /**
@@ -1199,8 +1198,8 @@ public class RRCTask extends MeasurementTask {
       
       for (int j = 0; j < 5; j++) {
         Logger.i("Running ste of tests " + (j+1) + " for fine grained inference");
-        // for (int i = 0; i < 3000; i += 100) {
-        for (int i = 1000; i < 4000; i += 50) {
+        for (int i = 0; i < 4000; i += 50) {
+        //for (int i = 1000; i < 4000; i += 50) {
           try {
 
             byte[] buf = new byte[0];
@@ -1220,9 +1219,12 @@ public class RRCTask extends MeasurementTask {
               socket.setSoTimeout(7000);
 
               socket.send(packet);
+              Thread.sleep(i);
               socket.receive(packetRcv);
             } catch (SocketTimeoutException e) {
               socket.close();
+            } catch (InterruptedException e) {
+              e.printStackTrace();
             }
           } catch (IOException e) {
             e.printStackTrace();
