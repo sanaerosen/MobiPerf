@@ -52,9 +52,13 @@ from gspeedometer.helpers import util
 
 import logging
 
+class MeasurementType:
+  """ Enum for the measurement type being archived."""
+  Measurement, RRC, RRCSize = range(3)
 
 def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
-                           limit=config.QUERY_FETCH_LIMIT):
+                           limit=config.QUERY_FETCH_LIMIT, 
+                           measure_type = MeasurementType.Measurement):
   """Retrieves device measurements from the datastore.
 
   This is factored out to allow for future growth and diversification is what
@@ -83,7 +87,13 @@ def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
     exclude_fields = config.ANONYMIZE_FIELDS
     location_precision = config.ANONYMIZE_LOCATION_PRECISION
 
-  measurement_q = model.Measurement.all()
+  if measure_type = MeasurementType.Measurement:
+     measurement_q = model.Measurement.all()
+  elif measure_type = MeasurementType.RRC:
+     measurement_q = model.RRCInferenceRawData.all()
+  elif measure_type = MeasurementType.RRCSizes:  
+     measurement_q = RRCInferenceSizesRawData.all()
+
   if device_id:
     measurement_q.filter('device_id =', device_id)
   if start:
@@ -92,11 +102,15 @@ def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
     measurement_q.filter('timestamp <', end)
   measurement_q.order('timestamp')
   measurement_list = measurement_q.fetch(config.QUERY_FETCH_LIMIT)
+
   # NOTE: this is inefficient and should iterate over a query instead of a list.
   # There is a TODO for this in util.MeasurementListToDictList().
-  return util.MeasurementListToDictList(measurement_list, include_fields,
+  if measure_type = MeasurementType.Measurement:
+    return util.MeasurementListToDictList(measurement_list, include_fields,
                                          exclude_fields, location_precision)
-
+  else:
+    return util.RRCMeasurementListToDictList(measurement_list, include_fields,
+                                         exclude_fields, location_precision)
 
 def ParametersToFileNameBase(device_id=None, start_time=None, end_time=None):
   """Builds a file name base based on query parameters.
