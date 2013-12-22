@@ -185,6 +185,53 @@ def translate(self, timestamp):
     else:
       return ('invalid translation', 'invalid translation')
 
+def RRCMeasurementListToDictList(measurement_list, device_id,
+     include_fields = None, exclude_fields=None, location_precision=None):
+  """Converts a list of rrc measurement entities into a list of dictionaries.
+
+  Given a list of measuerment model objects from the datastore, this method
+  will convert that list into a list of python dictionaries that can then
+  be serialized.
+
+  Args:
+    measurement_list: A list of measurement entities from the datastore.
+    include_fields: A list of attributes for the entities that should be
+        included in the serialized form.
+    exclude_fields: A list of attributes for the entities that should be
+        excluded in the serialized form.
+    location_precision: Precision for location measurements. If you want 
+        n significant figures, specify 10^n for this value.
+  
+  Returns:
+    A list of dictionaries representing the list of measurement entities.
+
+  Raises:
+    db.ReferencePropertyResolveError: handled for the cases where a device has
+        been deleted and where task has been deleted.
+    No New exceptions generated here.
+  """
+  output = list()
+
+  # First, fetch the corresponding device info
+  device_q = DeviceInfo.all()
+  device_q.filter('device_id =', device_id)
+  device_info = device_q.fetch(1)
+
+  # TODO how to get corresponding device properties?
+  # Might be easier to do in post-processing script on downloaded data
+ 
+  for measurement in measurement_list:
+    measurement.device_info = device_info
+
+    
+    mdict = ConvertToDict(measurement, include_fields, exclude_fields, 
+      True, None)
+    output.append(mdict)
+
+  return output
+
+
+
 def MeasurementListToDictList(measurement_list, include_fields=None,
     exclude_fields=None, location_precision=None):
   """Converts a list of measurement entities into a list of dictionaries.
