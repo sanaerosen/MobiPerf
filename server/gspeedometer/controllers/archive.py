@@ -52,13 +52,15 @@ from gspeedometer.helpers import util
 
 import logging
 
-class MeasurementType:
-  """ Enum for the measurement type being archived."""
-  Measurement, RRC, RRCSize = range(3)
+MEASUREMENT, RRC, RRCSIZE = range(3)
+MEASURE_STRING_TO_ENUM = {"Measurement":MEASUREMENT, "RRC":RRC, \
+    "RRCSize":RRCSIZE}
+MEASURE_ENUM_TO_STRING = {MEASUREMENT:"Measurement", RRC:"RRC",\
+    RRCSIZE:"RRCSize"}
 
 def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
                            limit=config.QUERY_FETCH_LIMIT, 
-                           measure_type = MeasurementType.Measurement):
+                           measure_type = MEASUREMENT):
   """Retrieves device measurements from the datastore.
 
   This is factored out to allow for future growth and diversification is what
@@ -87,11 +89,11 @@ def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
     exclude_fields = config.ANONYMIZE_FIELDS
     location_precision = config.ANONYMIZE_LOCATION_PRECISION
 
-  if measure_type = MeasurementType.Measurement:
+  if measure_type == MEASUREMENT:
      measurement_q = model.Measurement.all()
-  elif measure_type = MeasurementType.RRC:
+  elif measure_type == RRC:
      measurement_q = model.RRCInferenceRawData.all()
-  elif measure_type = MeasurementType.RRCSizes:  
+  elif measure_type == RRCSIZE:  
      measurement_q = RRCInferenceSizesRawData.all()
 
   if device_id:
@@ -105,7 +107,7 @@ def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
 
   # NOTE: this is inefficient and should iterate over a query instead of a list.
   # There is a TODO for this in util.MeasurementListToDictList().
-  if measure_type = MeasurementType.Measurement:
+  if measure_type == MEASUREMENT:
     return util.MeasurementListToDictList(measurement_list, include_fields,
                                          exclude_fields, location_precision)
   else:
@@ -189,6 +191,12 @@ class Archive(webapp.RequestHandler):
     end_time = self.request.get('end_time')
     anonymize = self.request.get('anonymize')
     limit = self.request.get('limit')
+    measure_type = self.request.get('type')
+    if measure_type:
+      measure_type = MEASURE_STRING_TO_ENUM[measure_type]
+    else:
+      measure_type = MEASUREMENT
+
     if start_time:
       start = util.MicrosecondsSinceEpochToTime(int(start_time))
     else:
@@ -207,10 +215,11 @@ class Archive(webapp.RequestHandler):
       limit = config.QUERY_FETCH_LIMIT_LARGE
 
     # Get data based on parameters.
-    model_list = GetMeasurementDictList(device_id, start, end, anonymize, limit)
+    model_list = GetMeasurementDictList(device_id, start, end, anonymize, \
+        limit, measure_type)
 
     # Serialize the data.
-    data = {'Measurement': json.dumps(model_list)}
+    data = {MEASURE_ENUM_TO_STRING[measure_type]: json.dumps(model_list)}
 
     # Generate directory/file name based on parameters.
     archive_dir = ParametersToFileNameBase(device_id, start, end)

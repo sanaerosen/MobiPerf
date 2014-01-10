@@ -64,7 +64,7 @@ ACTIVE_DAYS = 5
 # Archive Settings
 ARCHIVE_CONTENT_TYPE = 'application/zip'
 ARCHIVE_CONTENT_DISPOSITION_BASE = 'attachment; filename="%s.zip"'
-ARCHIVE_GS_BUCKET_PUBLIC = 'openmobiledata_public'
+ARCHIVE_GS_BUCKET_PUBLIC = 'test_public'
 ARCHIVE_GS_ACL_PUBLIC = 'public-read'
 
 # Archive anonymization settings
