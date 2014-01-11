@@ -217,7 +217,7 @@ def _getDeviceProperties(device_info, time, device_properties_database):
     return candidate_2
   return candidate_1
 
-def RRCMeasurementListToDictList(measurement_list, device_info_database,
+def RRCMeasurementListToDictList(measurement_list, device_info_database, \
      include_fields = None, exclude_fields=None, location_precision=None):
   """Converts a list of rrc measurement entities into a list of dictionaries.
 
