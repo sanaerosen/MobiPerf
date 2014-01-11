@@ -52,15 +52,21 @@ from gspeedometer.helpers import util
 
 import logging
 
-MEASUREMENT, RRC, RRCSIZE = range(3)
+# Enum and related variables for indicating what databases to archive.
+# MEASUREMENT: The Measurement database, most measurement data is here.
+# RRC: The RRC inference data database.
+# RRCSIZE: The RRC inference data based on packet size.
+# ALL_MEASURE_TYPES: All 3 of the above.  This is the default.
+# See gspeedometer/controllers/RRCstates.py. 
+MEASUREMENT, RRC, RRCSIZE, ALL_MEASURE_TYPES = range(4)
 MEASURE_STRING_TO_ENUM = {"Measurement":MEASUREMENT, "RRC":RRC, \
-    "RRCSize":RRCSIZE}
+        "RRCSize":RRCSIZE, "All":ALL_MEASURE_TYPES}
 MEASURE_ENUM_TO_STRING = {MEASUREMENT:"Measurement", RRC:"RRC",\
     RRCSIZE:"RRCSize"}
 
 def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
                            limit=config.QUERY_FETCH_LIMIT, 
-                           measure_type = MEASUREMENT):
+                           measure_type = ALL_MEASURE_TYPES):
   """Retrieves device measurements from the datastore.
 
   This is factored out to allow for future growth and diversification is what
@@ -72,6 +78,7 @@ def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
     end: A dataetime object for the latest measurement.
     anonymize: A boolean, will anonymize data if set to True.
     limit: An int specifying number of records to fetch.
+    measure_type: An int corresponding to (a) database(s) to fetch.
 
   Returns:
     A list of dictionary items representing the measurement entities from the
@@ -94,7 +101,7 @@ def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
   elif measure_type == RRC:
      measurement_q = model.RRCInferenceRawData.all()
   elif measure_type == RRCSIZE:  
-     measurement_q = RRCInferenceSizesRawData.all()
+     measurement_q = model.RRCInferenceSizesRawData.all()
 
   if device_id:
     measurement_q.filter('device_id =', device_id)
@@ -111,8 +118,9 @@ def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
     return util.MeasurementListToDictList(measurement_list, include_fields,
                                          exclude_fields, location_precision)
   else:
-    return util.RRCMeasurementListToDictList(measurement_list, include_fields,
-                                         exclude_fields, location_precision)
+    device_database = model.DeviceInfo
+    return util.RRCMeasurementListToDictList(measurement_list, device_database,
+            include_fields, exclude_fields, location_precision)
 
 def ParametersToFileNameBase(device_id=None, start_time=None, end_time=None):
   """Builds a file name base based on query parameters.
@@ -195,7 +203,7 @@ class Archive(webapp.RequestHandler):
     if measure_type:
       measure_type = MEASURE_STRING_TO_ENUM[measure_type]
     else:
-      measure_type = MEASUREMENT
+      measure_type = ALL_MEASURE_TYPES 
 
     if start_time:
       start = util.MicrosecondsSinceEpochToTime(int(start_time))
@@ -214,12 +222,21 @@ class Archive(webapp.RequestHandler):
     else:
       limit = config.QUERY_FETCH_LIMIT_LARGE
 
-    # Get data based on parameters.
-    model_list = GetMeasurementDictList(device_id, start, end, anonymize, \
-        limit, measure_type)
+    # Convert the argument to a list of measurement types to process
+    # in order to support archiving multiple databases at once
+    if measure_type == ALL_MEASURE_TYPES:
+      measure_type_list = [RRC, RRCSIZE, MEASUREMENT]
+    else:
+      measure_type_list = [measure_type]
+    
+    data = {}
+    for sub_measure_type in measure_type_list:
+      # Fetch the data associated with that measurement type
+      model_list =GetMeasurementDictList(device_id, start, end, anonymize, \
+          limit, sub_measure_type)
+      # Serialize the data
+      data[MEASURE_ENUM_TO_STRING[sub_measure_type]] = json.dumps(model_list)
 
-    # Serialize the data.
-    data = {MEASURE_ENUM_TO_STRING[measure_type]: json.dumps(model_list)}
 
     # Generate directory/file name based on parameters.
     archive_dir = ParametersToFileNameBase(device_id, start, end)

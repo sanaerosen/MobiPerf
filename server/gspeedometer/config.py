@@ -68,5 +68,6 @@ ARCHIVE_GS_BUCKET_PUBLIC = 'test_public'
 ARCHIVE_GS_ACL_PUBLIC = 'public-read'
 
 # Archive anonymization settings
-ANONYMIZE_FIELDS = ["user", "ip_address", "id"] # fields to remove from data
+# fields to remove from data
+ANONYMIZE_FIELDS = ["user", "ip_address", "id", "phone_id", "username"] 
 ANONYMIZE_LOCATION_PRECISION = 100 # number of sig figs is log(this)

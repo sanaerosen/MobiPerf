@@ -26,9 +26,11 @@ from google.appengine.ext import webapp
 from google.appengine.ext.webapp.util import run_wsgi_app
 from google.appengine.ext import db
 from gspeedometer import config_private
+# due to name collisions
 import hashlib
 import logging
 import time
+
 
 def StringToTime(thestr):
   """Convert an ISO8601 timestring into a datetime object."""
@@ -185,7 +187,7 @@ def translate(self, timestamp):
     else:
       return ('invalid translation', 'invalid translation')
 
-def RRCMeasurementListToDictList(measurement_list, device_id,
+def RRCMeasurementListToDictList(measurement_list, device_q,
      include_fields = None, exclude_fields=None, location_precision=None):
   """Converts a list of rrc measurement entities into a list of dictionaries.
 
@@ -195,6 +197,9 @@ def RRCMeasurementListToDictList(measurement_list, device_id,
 
   Args:
     measurement_list: A list of measurement entities from the datastore.
+    device info instance. Is not actually put in the data structure returned.
+    device_info_database: Pass the database of device info here.
+        We need to do it this way to avoid import problems.
     include_fields: A list of attributes for the entities that should be
         included in the serialized form.
     exclude_fields: A list of attributes for the entities that should be
@@ -213,19 +218,35 @@ def RRCMeasurementListToDictList(measurement_list, device_id,
   output = list()
 
   # First, fetch the corresponding device info
-  device_q = DeviceInfo.all()
-  device_q.filter('device_id =', device_id)
-  device_info = device_q.fetch(1)
+  
+  device_info_dict = {}
 
-  # TODO how to get corresponding device properties?
-  # Might be easier to do in post-processing script on downloaded data
- 
   for measurement in measurement_list:
-    measurement.device_info = device_info
+    device_id = measurement.phone_id
+     
+    if device_id in device_info_dict:
+      device_info = device_info_dict[device_id]
+    else:
+ #     device_q.filter('device_id =', device_id)
+#      device_info = device_q.fetch(1)
+      device_info = device_q.GetDeviceWithAcl(device_id)
+      logging.info(str(device_q.GetDeviceListWithAcl()))
+      device_info_dict[device_id] = device_info
 
-    
-    mdict = ConvertToDict(measurement, include_fields, exclude_fields, 
+
+
+    mdict = ConvertToDict(measurement, include_fields, exclude_fields, \
       True, None)
+
+    # Fill in additional fields
+
+    # We want to preserve test id/phone id pairs without being able to tie 
+    # measurements together when anonymizing. 
+    mdict["test_id"] = HashDeviceId(str(measurement.test_id) +
+        measurement.phone_id)
+
+    mdict["device_info"] = ConvertToDict(device_info, include_fields, \
+        exclude_fields, True, None)
     output.append(mdict)
 
   return output
