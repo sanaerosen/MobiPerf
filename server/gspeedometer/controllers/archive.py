@@ -203,7 +203,7 @@ class Archive(webapp.RequestHandler):
     if measure_type:
       measure_type = MEASURE_STRING_TO_ENUM[measure_type]
     else:
-      measure_type = ALL_MEASURE_TYPES 
+      measure_type = MEASUREMENT 
 
     if start_time:
       start = util.MicrosecondsSinceEpochToTime(int(start_time))
