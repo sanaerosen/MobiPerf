@@ -187,7 +187,37 @@ def translate(self, timestamp):
     else:
       return ('invalid translation', 'invalid translation')
 
-def RRCMeasurementListToDictList(measurement_list, device_q,
+def _getDeviceProperties(device_info, time, device_properties_database):
+  """Return the DeviceProperties entry closest to an RRC state measurement.
+  
+  Args:
+    device_info: The corresponding device info instance. Access control
+      should have been resolved when fetching this.
+    time: A datetime instance when the RRC measurements were taken.
+    device_properties_database: Pass the device properties database to avoid
+      import problems.
+      
+  Returns:
+    The corresponding DeviceProperties entry closest in time to the RRC 
+    measurements."""
+
+  query = device_properties_database.all()
+  query.filter("device_info=", device_info)
+  query.filter("timestamp < ", time)
+  query.order("-timestamp")
+  candidate_1 = query.fetch(1)
+
+  query = device_properties_database.all()
+  query.filter("device_info=", device_info)
+  query.filter("timestamp > ", time)
+  query.order("timestamp")
+  candidate_1 = query.fetch(1)
+  
+  if (candidate_1.timestamp - time) > (time - candidate_2.timestamp):
+    return candidate_2
+  return candidate_1
+
+def RRCMeasurementListToDictList(measurement_list, device_info_database,
      include_fields = None, exclude_fields=None, location_precision=None):
   """Converts a list of rrc measurement entities into a list of dictionaries.
 
@@ -221,19 +251,11 @@ def RRCMeasurementListToDictList(measurement_list, device_q,
   
   device_info_dict = {}
 
+  for item in  device_info_database.GetDeviceListWithAcl():
+      device_info_dict[item.id] = item
+
   for measurement in measurement_list:
     device_id = measurement.phone_id
-     
-    if device_id in device_info_dict:
-      device_info = device_info_dict[device_id]
-    else:
- #     device_q.filter('device_id =', device_id)
-#      device_info = device_q.fetch(1)
-      device_info = device_q.GetDeviceWithAcl(device_id)
-      logging.info(str(device_q.GetDeviceListWithAcl()))
-      device_info_dict[device_id] = device_info
-
-
 
     mdict = ConvertToDict(measurement, include_fields, exclude_fields, \
       True, None)
@@ -244,9 +266,14 @@ def RRCMeasurementListToDictList(measurement_list, device_q,
     # measurements together when anonymizing. 
     mdict["test_id"] = HashDeviceId(str(measurement.test_id) +
         measurement.phone_id)
+    
+    # Find the device info corresponding and save it
+    if device_id in device_info_dict:
+      device_info = device_info_dict[device_id]     
+      mdict["device_info"] = ConvertToDict(device_info, include_fields, \
+          exclude_fields, True, None)
 
-    mdict["device_info"] = ConvertToDict(device_info, include_fields, \
-        exclude_fields, True, None)
+    # Fing the device properties coresponding to the device info and closest in time
     output.append(mdict)
 
   return output
