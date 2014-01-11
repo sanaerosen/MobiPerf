@@ -44,7 +44,7 @@ TIMESERIES_POINT_LIMIT = 100
 # The total number of elements to fetch for a given query
 QUERY_FETCH_LIMIT = 500
 # The total number of elements to fetch for a large query
-QUERY_FETCH_LIMIT_LARGE = 100000
+QUERY_FETCH_LIMIT_LARGE = 10000000
 # The minimum ping delay in ms that we consider 'slow'
 SLOW_PING_THRESHOLD_MS = 150
 # The minimum dns lookup delay in ms that we consider 'slow'
@@ -69,5 +69,5 @@ ARCHIVE_GS_ACL_PUBLIC = 'public-read'
 
 # Archive anonymization settings
 # fields to remove from data
-ANONYMIZE_FIELDS = ["user", "ip_address", "id", "phone_id", "username"] 
-ANONYMIZE_LOCATION_PRECISION = 100 # number of sig figs is log(this)
+ANONYMIZE_FIELDS = ["user", "ip_address", "id", "phone_id", "username"]
+ANONYMIZE_LOCATION_PRECISION = 100  # number of sig figs is log(this)

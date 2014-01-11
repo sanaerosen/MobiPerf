@@ -57,16 +57,16 @@ import logging
 # RRC: The RRC inference data database.
 # RRCSIZE: The RRC inference data based on packet size.
 # ALL_MEASURE_TYPES: All 3 of the above.  This is the default.
-# See gspeedometer/controllers/RRCstates.py. 
+# See gspeedometer/controllers/RRCstates.py.
 MEASUREMENT, RRC, RRCSIZE, ALL_MEASURE_TYPES = range(4)
 MEASURE_STRING_TO_ENUM = {"Measurement":MEASUREMENT, "RRC":RRC, \
         "RRCSize":RRCSIZE, "All":ALL_MEASURE_TYPES}
-MEASURE_ENUM_TO_STRING = {MEASUREMENT:"Measurement", RRC:"RRC",\
+MEASURE_ENUM_TO_STRING = {MEASUREMENT:"Measurement", RRC:"RRC", \
     RRCSIZE:"RRCSize"}
 
 def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
-                           limit=config.QUERY_FETCH_LIMIT, 
-                           measure_type = ALL_MEASURE_TYPES):
+                           limit=config.QUERY_FETCH_LIMIT,
+                           measure_type=ALL_MEASURE_TYPES):
   """Retrieves device measurements from the datastore.
 
   This is factored out to allow for future growth and diversification is what
@@ -100,7 +100,7 @@ def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
      measurement_q = model.Measurement.all()
   elif measure_type == RRC:
      measurement_q = model.RRCInferenceRawData.all()
-  elif measure_type == RRCSIZE:  
+  elif measure_type == RRCSIZE:
      measurement_q = model.RRCInferenceSizesRawData.all()
 
   if device_id:
@@ -192,7 +192,7 @@ class Archive(webapp.RequestHandler):
        No exceptions handled here.
        No new exceptions generated here.
     """
-    #TODO(mdw) Unit test needed.
+    # TODO(mdw) Unit test needed.
     # Make sense of parameters
     device_id = self.request.get('device_id')
     start_time = self.request.get('start_time')
@@ -203,7 +203,7 @@ class Archive(webapp.RequestHandler):
     if measure_type:
       measure_type = MEASURE_STRING_TO_ENUM[measure_type]
     else:
-      measure_type = MEASUREMENT 
+      measure_type = MEASUREMENT
 
     if start_time:
       start = util.MicrosecondsSinceEpochToTime(int(start_time))
@@ -228,11 +228,11 @@ class Archive(webapp.RequestHandler):
       measure_type_list = [RRC, RRCSIZE, MEASUREMENT]
     else:
       measure_type_list = [measure_type]
-    
+
     data = {}
     for sub_measure_type in measure_type_list:
       # Fetch the data associated with that measurement type
-      model_list =GetMeasurementDictList(device_id, start, end, anonymize, \
+      model_list = GetMeasurementDictList(device_id, start, end, anonymize, \
           limit, sub_measure_type)
       # Serialize the data
       data[MEASURE_ENUM_TO_STRING[sub_measure_type]] = json.dumps(model_list)
@@ -244,7 +244,7 @@ class Archive(webapp.RequestHandler):
     # For some reason there was a problem with Unicode chars in the request.
     archive_dir = archive_dir.encode('ascii', 'ignore')
 
-    #NOTE: This is a multiple return.
+    # NOTE: This is a multiple return.
     return archive_dir, archive_util.ArchiveCompress(data,
         directory=archive_dir)
 
@@ -261,7 +261,7 @@ class Archive(webapp.RequestHandler):
           reporting errors.
        No new exceptions generated here.
     """
-    #TODO(mdw) Unit test needed.
+    # TODO(mdw) Unit test needed.
     try:
       archive_dir, archive_data = self._Archive()
       self.response.headers['Content-Type'] = config.ARCHIVE_CONTENT_TYPE
@@ -272,12 +272,12 @@ class Archive(webapp.RequestHandler):
       logging.exception(e)
       self.response.clear()
       self.response.set_status(500)
-      #NOTE: if you see this error make sure it is run on a backend instance.
+      # NOTE: if you see this error make sure it is run on a backend instance.
       self.response.headers['Content-Type'] = 'application/json'
       self.response.out.write(('{\'status\':500,  \'error_name\':\'%s\', '
           '\'error_value\':\'%s\'}' % ('DeadlineExceededError', e)))
 
-    #TODO(gavaletz) log the archive request
+    # TODO(gavaletz) log the archive request
     # Consider saving the file to GS too so that it can be returned from there
     # if requested again in the future.
 
@@ -300,45 +300,48 @@ class Archive(webapp.RequestHandler):
           reporting errors.
        No new exceptions generated here.
     """
-    #TODO(mdw) Unit test needed.
-    try:
-      archive_dir, archive_data = self._Archive()
+    # TODO(mdw) Unit test needed.
+    archive_names = []
+    for anonymize in (True, False):
+      try:
+        archive_dir, archive_data = self._Archive()
 
-      anonymize = self.request.get('anonymize')
-      anonymize = not not anonymize
+        # anonymize = self.request.get('anonymize')
+        # anonymize = not not anonymize
 
-      # Create the file
-      if not anonymize:
-        bucket = config_private.ARCHIVE_GS_BUCKET
-        acl = config_private.ARCHIVE_GS_ACL
-      else:
-        bucket = config.ARCHIVE_GS_BUCKET_PUBLIC
-        acl = config.ARCHIVE_GS_ACL_PUBLIC
+        # Create the file
+        if not anonymize:
+          bucket = config_private.ARCHIVE_GS_BUCKET
+          acl = config_private.ARCHIVE_GS_ACL
+        else:
+          bucket = config.ARCHIVE_GS_BUCKET_PUBLIC
+          acl = config.ARCHIVE_GS_ACL_PUBLIC
 
-      gs_archive_name = '/gs/%s/%s.zip' % (bucket, archive_dir)
-      gs_archive = files.gs.create(gs_archive_name,
-          mime_type=config.ARCHIVE_CONTENT_TYPE, acl=acl,
-          content_disposition=(
-              config.ARCHIVE_CONTENT_DISPOSITION_BASE % archive_dir))
+        gs_archive_name = '/gs/%s/%s.zip' % (bucket, archive_dir)
+        archive_names.append(gs_archive_name)
+        gs_archive = files.gs.create(gs_archive_name,
+            mime_type=config.ARCHIVE_CONTENT_TYPE, acl=acl,
+            content_disposition=(
+                config.ARCHIVE_CONTENT_DISPOSITION_BASE % archive_dir))
 
-      # Open the file and write the data.
-      with files.open(gs_archive, 'a') as f:
-        f.write(archive_data)
+        # Open the file and write the data.
+        with files.open(gs_archive, 'a') as f:
+          f.write(archive_data)
 
-      # Finalize (a special close) the file.
-      files.finalize(gs_archive)
+        # Finalize (a special close) the file.
+        files.finalize(gs_archive)
+      except DeadlineExceededError, e:
+        logging.exception(e)
+        self.response.clear()
+        self.response.set_status(500)
+        # NOTE: if you see this error make sure it is run on a backend instance.
+        self.response.headers['Content-Type'] = 'application/json'
+        self.response.out.write(('{\'status\':500,  \'error_name\':\'%s\', '
+            '\'error_value\':\'%s\'}' % ('DeadlineExceededError', e)))
+
       self.response.headers['Content-Type'] = 'application/json'
       self.response.out.write('{\'status\':200,  \'archive_name\':\'%s\'}' %
-          gs_archive_name)
-    except DeadlineExceededError, e:
-      logging.exception(e)
-      self.response.clear()
-      self.response.set_status(500)
-      #NOTE: if you see this error make sure it is run on a backend instance.
-      self.response.headers['Content-Type'] = 'application/json'
-      self.response.out.write(('{\'status\':500,  \'error_name\':\'%s\', '
-          '\'error_value\':\'%s\'}' % ('DeadlineExceededError', e)))
-
-    #TODO(gavaletz) create a datastore entry for the archive params, md5, etc.
+          ",".join(archive_names))
+    # TODO(gavaletz) create a datastore entry for the archive params, md5, etc.
     # location might be a gs bucket, someone who downloaded it etc.
     # with this data we do not have to do things twice.
