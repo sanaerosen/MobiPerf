@@ -61,7 +61,7 @@ import logging
 MEASUREMENT, RRC, RRCSIZE, ALL_MEASURE_TYPES = range(4)
 MEASURE_STRING_TO_ENUM = {"Measurement":MEASUREMENT, "RRC":RRC, \
         "RRCSize":RRCSIZE, "All":ALL_MEASURE_TYPES}
-MEASURE_ENUM_TO_STRING = {MEASUREMENT:"Measurement", RRC:"RRC",\
+MEASURE_ENUM_TO_STRING = {MEASUREMENT:"Measurement", RRC:"RRC", \
         RRCSIZE:"RRCSize", ALL_MEASURE_TYPES:"ALL"}
 
 def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
