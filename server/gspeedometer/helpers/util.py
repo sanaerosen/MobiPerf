@@ -201,7 +201,6 @@ def _RRCSizesDeviceIdRepair(entry, rrc_database):
        inferred phone ID."""
 
   # First, detect the bug
-  logging.info("Starting size repair")
   hashed_network_type = HashDeviceId(entry.network_type)
   if hashed_network_type != entry.phone_id:
       return

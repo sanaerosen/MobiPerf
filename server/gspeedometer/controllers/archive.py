@@ -124,9 +124,8 @@ def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
       approximate_size_data = False
     return util.RRCMeasurementListToDictList(measurement_list, \
         model.DeviceInfo, model.DeviceProperties, include_fields, \
-        exclude_fields, location_precision, approximate_size_data)
-    #, \
-    #    model.RRCInferenceRawData)
+        exclude_fields, location_precision, approximate_size_data, \
+        model.RRCInferenceRawData)
 
 def ParametersToFileNameBase(device_id=None, start_time=None, end_time=None):
   """Builds a file name base based on query parameters.
