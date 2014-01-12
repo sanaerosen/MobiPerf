@@ -17,8 +17,8 @@
 """Request handlers and some functions to deal with data archival.
 
 For now the only data to be archived is the measurement data.  This data is to
-be serialized, compressed and returned to the user in the form of a file 
-download or posted to BigStore (Google Storage for Developers).  
+be serialized, compressed and returned to the user in the form of a file
+download or posted to BigStore (Google Storage for Developers).
 
 Configuration for the storage location is in the global configuration file, and
 care should be taken to ensure that the data is sent to the right place and
@@ -118,9 +118,9 @@ def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
     return util.MeasurementListToDictList(measurement_list, include_fields,
                                          exclude_fields, location_precision)
   else:
-    device_database = model.DeviceInfo
-    return util.RRCMeasurementListToDictList(measurement_list, device_database,
-            include_fields, exclude_fields, location_precision)
+    return util.RRCMeasurementListToDictList(measurement_list, \
+        model.DeviceInfo, model.DeviceProperties, include_fields, \
+        exclude_fields, location_precision)
 
 def ParametersToFileNameBase(device_id=None, start_time=None, end_time=None):
   """Builds a file name base based on query parameters.
@@ -250,7 +250,7 @@ class Archive(webapp.RequestHandler):
 
   def ArchiveToFile(self, **unused_args):
     """Responds with data in compressed JSON format for download.
-    
+
     Allows a file containing the requested data to be downloaded by the user.
     Please see _Archive for details on how arguments are handled and data is
     packaged.
@@ -283,7 +283,7 @@ class Archive(webapp.RequestHandler):
 
   def ArchiveToGoogleStorage(self, **unused_args):
     """Posts data in compressed JSON format to Google Storage for Developers.
-    
+
     Allows a file containing the requested data to be stored in Google Storage
     for developers for later download.  Please see _Archive for details on
     how arguments are handled and data is packaged.

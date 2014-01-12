@@ -84,10 +84,10 @@ def ConvertToDict(model, include_fields=None, exclude_fields=None,
 
      For each property in the model, set a value in the returned dict
      with the property name as its key.
-     
-     location_precision: if not None, it specifies how location precision. The 
-     code will multiply by this value, take the integer value and divide by 
-     this value. In other words, we're giving precision to the 
+
+     location_precision: if not None, it specifies how location precision. The
+     code will multiply by this value, take the integer value and divide by
+     this value. In other words, we're giving precision to the
      'location_precision'ths. If it's ten, we're giving tenths of a degree.
   """
   output = {}
@@ -189,36 +189,48 @@ def translate(self, timestamp):
 
 def _getDeviceProperties(device_info, time, device_properties_database):
   """Return the DeviceProperties entry closest to an RRC state measurement.
-  
+
   Args:
     device_info: The corresponding device info instance. Access control
       should have been resolved when fetching this.
     time: A datetime instance when the RRC measurements were taken.
     device_properties_database: Pass the device properties database to avoid
       import problems.
-      
+
   Returns:
-    The corresponding DeviceProperties entry closest in time to the RRC 
-    measurements."""
+    The corresponding DeviceProperties entry closest in time to the RRC
+    measurements. If none is found, return None. """
 
   query = device_properties_database.all()
-  query.filter("device_info=", device_info)
+  query.filter("device_info = ", device_info)
   query.filter("timestamp < ", time)
   query.order("-timestamp")
   candidate_1 = query.fetch(1)
 
   query = device_properties_database.all()
-  query.filter("device_info=", device_info)
+  query.filter("device_info = ", device_info)
   query.filter("timestamp > ", time)
   query.order("timestamp")
-  candidate_1 = query.fetch(1)
-  
-  if (candidate_1.timestamp - time) > (time - candidate_2.timestamp):
+  candidate_2 = query.fetch(1)
+
+  # If one is empty, return the other (or none if both are empty)
+  if not candidate_1 and not candidate_2:
+      return None
+  if not candidate_1:
+      return candidate_2[0]
+  if not candidate_2:
+      return candidate_1[0]
+
+  candidate_1 = candidate_1[0]
+  candidate_2 = candidate_2[0]
+  # Otherwise, return the one that has the closest timestamp
+  if (time - candidate_1.timestamp) > (candidate_2.timestamp - time):
     return candidate_2
   return candidate_1
 
-def RRCMeasurementListToDictList(measurement_list, device_info_database, \
-     include_fields = None, exclude_fields=None, location_precision=None):
+def RRCMeasurementListToDictList(measurement_list, device_info_database,
+    device_properties_database,include_fields = None, exclude_fields=None, \
+    location_precision=None):
   """Converts a list of rrc measurement entities into a list of dictionaries.
 
   Given a list of measuerment model objects from the datastore, this method
@@ -227,16 +239,18 @@ def RRCMeasurementListToDictList(measurement_list, device_info_database, \
 
   Args:
     measurement_list: A list of measurement entities from the datastore.
-    device info instance. Is not actually put in the data structure returned.
+        device info instance. Is not actually put in the data structure
+        returned.
     device_info_database: Pass the database of device info here.
         We need to do it this way to avoid import problems.
+    device_properties_database: Likewise, for the DeviceProperties database.
     include_fields: A list of attributes for the entities that should be
         included in the serialized form.
     exclude_fields: A list of attributes for the entities that should be
         excluded in the serialized form.
-    location_precision: Precision for location measurements. If you want 
+    location_precision: Precision for location measurements. If you want
         n significant figures, specify 10^n for this value.
-  
+
   Returns:
     A list of dictionaries representing the list of measurement entities.
 
@@ -248,7 +262,7 @@ def RRCMeasurementListToDictList(measurement_list, device_info_database, \
   output = list()
 
   # First, fetch the corresponding device info
-  
+
   device_info_dict = {}
 
   for item in  device_info_database.GetDeviceListWithAcl():
@@ -262,18 +276,31 @@ def RRCMeasurementListToDictList(measurement_list, device_info_database, \
 
     # Fill in additional fields
 
-    # We want to preserve test id/phone id pairs without being able to tie 
-    # measurements together when anonymizing. 
+    # We want to preserve test id/phone id pairs without being able to tie
+    # measurements together when anonymizing.
     mdict["test_id"] = HashDeviceId(str(measurement.test_id) +
         measurement.phone_id)
-    
-    # Find the device info corresponding and save it
-    if device_id in device_info_dict:
-      device_info = device_info_dict[device_id]     
-      mdict["device_info"] = ConvertToDict(device_info, include_fields, \
-          exclude_fields, True, None)
 
-    # Fing the device properties coresponding to the device info and closest in time
+    # Find the corresponding device info, then the corresponding device
+    # properties entry.  Note that we need to save the device info entry
+    # only if the device properties entry is missing, as the device info entry
+    # is embedded in the device properties entry.
+    #
+    # We fetch device info first because it has a direct link to the device id
+    # which is what is stored with the RRC data.
+    if device_id in device_info_dict:
+      device_info = device_info_dict[device_id]
+      device_properties = _getDeviceProperties(device_info, \
+          measurement.timestamp, device_properties_database)
+      if device_properties:
+        mdict["device_properties"] = ConvertToDict(device_properties, \
+            include_fields, exclude_fields, True, None)
+      else:
+        mdict["device_info"] = ConvertToDict(device_info, include_fields, \
+            exclude_fields, True, None)
+
+
+    # Find the device properties coresponding to the device info and closest in time
     output.append(mdict)
 
   return output
@@ -294,9 +321,9 @@ def MeasurementListToDictList(measurement_list, include_fields=None,
         included in the serialized form.
     exclude_fields: A list of attributes for the entities that should be
         excluded in the serialized form.
-    location_precision: Precision for location measurements. If you want 
+    location_precision: Precision for location measurements. If you want
         n significant figures, specify 10^n for this value.
-  
+
   Returns:
     A list of dictionaries representing the list of measurement entities.
 
