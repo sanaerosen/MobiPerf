@@ -187,6 +187,43 @@ def translate(self, timestamp):
     else:
       return ('invalid translation', 'invalid translation')
 
+def _RRCSizesDeviceIdRepair(entry, rrc_database):
+  """For RRCInferenceSizesRawData, detect if there is a bug in the phone ID
+     recorded and repair it.
+
+     Args:
+       entry: The RRCInferenceSizesRawData meaurement entry to repair.
+       rrc_database: The RRCInferenceRawData database to fetch the
+           associated phone ID.
+
+     Returns:
+       None if not repairable, or a repair does not apply. Otherwise, the
+       inferred phone ID."""
+
+  # First, detect the bug
+  logging.info("Starting size repair")
+  hashed_network_type = HashDeviceId(entry.network_type)
+  if hashed_network_type != entry.phone_id:
+      return
+
+  # Otherwise, find a corresponding RRCInferenceRawData instance within
+  # 10 minutes and with the same test id, but only if there is no interference.
+  query = rrc_database.all()
+  query.filter("network_type = ", entry.network_type)
+  lowest_time = entry.timestamp - datetime.timedelta(0,600)
+  query.filter("timestamp < ", entry.timestamp)
+  query.filter("timestamp > ", lowest_time)
+  nearby_values = query.fetch(10)
+
+  all_candidates = set()
+  for item in nearby_values:
+      all_candidates.add(item.phone_id)
+
+  if len(all_candidates) != 1:
+      return None
+  return list(all_candidates)[0]
+
+
 def _getDeviceProperties(device_info, time, device_properties_database):
   """Return the DeviceProperties entry closest to an RRC state measurement.
 
@@ -228,9 +265,9 @@ def _getDeviceProperties(device_info, time, device_properties_database):
     return candidate_2
   return candidate_1
 
-def RRCMeasurementListToDictList(measurement_list, device_info_database,
+def RRCMeasurementListToDictList(measurement_list, device_info_database, \
     device_properties_database,include_fields = None, exclude_fields=None, \
-    location_precision=None):
+    location_precision=None, approximate_size_data=False, rrc_database=None):
   """Converts a list of rrc measurement entities into a list of dictionaries.
 
   Given a list of measuerment model objects from the datastore, this method
@@ -250,6 +287,8 @@ def RRCMeasurementListToDictList(measurement_list, device_info_database,
         excluded in the serialized form.
     location_precision: Precision for location measurements. If you want
         n significant figures, specify 10^n for this value.
+    rrc_database: a link to RRCInferenceRawData.  This must be set if
+      approximate_size_data is true.
 
   Returns:
     A list of dictionaries representing the list of measurement entities.
@@ -281,6 +320,11 @@ def RRCMeasurementListToDictList(measurement_list, device_info_database,
     mdict["test_id"] = HashDeviceId(str(measurement.test_id) +
         measurement.phone_id)
 
+    # In the case that RRCInferenceSizesRawData is lacking correct phone IDs,
+    # try and fix it
+    if approximate_size_data and device_id not in device_info_dict:
+      device_id = _RRCSizesDeviceIdRepair(measurement, rrc_database)
+
     # Find the corresponding device info, then the corresponding device
     # properties entry.  Note that we need to save the device info entry
     # only if the device properties entry is missing, as the device info entry
@@ -288,7 +332,7 @@ def RRCMeasurementListToDictList(measurement_list, device_info_database,
     #
     # We fetch device info first because it has a direct link to the device id
     # which is what is stored with the RRC data.
-    if device_id in device_info_dict:
+    if device_id and device_id in device_info_dict:
       device_info = device_info_dict[device_id]
       device_properties = _getDeviceProperties(device_info, \
           measurement.timestamp, device_properties_database)

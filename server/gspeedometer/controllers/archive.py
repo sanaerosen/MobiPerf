@@ -66,7 +66,8 @@ MEASURE_ENUM_TO_STRING = {MEASUREMENT:"Measurement", RRC:"RRC", \
 
 def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
                            limit=config.QUERY_FETCH_LIMIT,
-                           measure_type=ALL_MEASURE_TYPES):
+                           measure_type=ALL_MEASURE_TYPES,
+                           approximate_size_data=False):
   """Retrieves device measurements from the datastore.
 
   This is factored out to allow for future growth and diversification is what
@@ -118,9 +119,14 @@ def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
     return util.MeasurementListToDictList(measurement_list, include_fields,
                                          exclude_fields, location_precision)
   else:
+    # We only have to approximate size data for RRC_SIZE types
+    if measure_type != RRCSIZE:
+      approximate_size_data = False
     return util.RRCMeasurementListToDictList(measurement_list, \
         model.DeviceInfo, model.DeviceProperties, include_fields, \
-        exclude_fields, location_precision)
+        exclude_fields, location_precision, approximate_size_data)
+    #, \
+    #    model.RRCInferenceRawData)
 
 def ParametersToFileNameBase(device_id=None, start_time=None, end_time=None):
   """Builds a file name base based on query parameters.
@@ -200,10 +206,16 @@ class Archive(webapp.RequestHandler):
     anonymize = self.request.get('anonymize')
     limit = self.request.get('limit')
     measure_type = self.request.get('type')
+    # Due to a bug in how we were labelling rrc size data, for devices running
+    # 2.3.1 it is not possible to associate a test with a DeviceInfo entry
+    # directly. This triggers whether or not we should attempt to figure out
+    # the corresponding DeviceInfo entry from time stamps.
+    # If this is true, we only do this when we detect the data is buggy.
+    approximate_size_data = self.request.get('rrc_size_approx')
     if measure_type:
       measure_type = MEASURE_STRING_TO_ENUM[measure_type]
     else:
-      measure_type = MEASUREMENT
+      measure_type = ALL_MEASURE_TYPES
 
     if start_time:
       start = util.MicrosecondsSinceEpochToTime(int(start_time))
@@ -216,6 +228,7 @@ class Archive(webapp.RequestHandler):
       d0 = datetime.datetime.today() - datetime.timedelta(days=1)
       end = datetime.datetime(d0.year, d0.month, d0.day, 23, 59, 59, 999999)
     anonymize = not not anonymize
+    approximate_size_data = not not approximate_size_data
     # Use limit if specified, otherwise use default limit
     if limit is None:
       limit = int(limit)
@@ -233,7 +246,7 @@ class Archive(webapp.RequestHandler):
     for sub_measure_type in measure_type_list:
       # Fetch the data associated with that measurement type
       model_list = GetMeasurementDictList(device_id, start, end, anonymize, \
-          limit, sub_measure_type)
+          limit, sub_measure_type, approximate_size_data)
       # Serialize the data
       data[MEASURE_ENUM_TO_STRING[sub_measure_type]] = json.dumps(model_list)
 
