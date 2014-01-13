@@ -321,8 +321,11 @@ def RRCMeasurementListToDictList(measurement_list, device_info_database, \
 
     # In the case that RRCInferenceSizesRawData is lacking correct phone IDs,
     # try and fix it
+    fixed_device_id = False
     if approximate_size_data and device_id not in device_info_dict:
       device_id = _RRCSizesDeviceIdRepair(measurement, rrc_database)
+      if device_id:
+        fixed_device_id = True
 
     # Find the corresponding device info, then the corresponding device
     # properties entry.  Note that we need to save the device info entry
@@ -341,6 +344,7 @@ def RRCMeasurementListToDictList(measurement_list, device_info_database, \
       else:
         mdict["device_info"] = ConvertToDict(device_info, include_fields, \
             exclude_fields, True, None)
+    mdict["fixed_device_id"] = fixed_device_id
 
 
     # Find the device properties coresponding to the device info and closest in time

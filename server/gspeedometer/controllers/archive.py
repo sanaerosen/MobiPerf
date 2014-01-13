@@ -111,7 +111,7 @@ def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
   if end:
     measurement_q.filter('timestamp <', end)
   measurement_q.order('timestamp')
-  measurement_list = measurement_q.fetch(config.QUERY_FETCH_LIMIT)
+  measurement_list = measurement_q.fetch(limit)
 
   # NOTE: this is inefficient and should iterate over a query instead of a list.
   # There is a TODO for this in util.MeasurementListToDictList().
