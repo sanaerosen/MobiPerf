@@ -168,7 +168,7 @@ class Archive(webapp.RequestHandler):
        No exceptions handled here.
        No new exceptions generated here.
     """
-    #TODO(mdw) Unit test needed.
+    # TODO(mdw) Unit test needed.
     # Make sense of parameters
     device_id = self.request.get('device_id')
     start_time = self.request.get('start_time')
@@ -204,7 +204,7 @@ class Archive(webapp.RequestHandler):
     # For some reason there was a problem with Unicode chars in the request.
     archive_dir = archive_dir.encode('ascii', 'ignore')
 
-    #NOTE: This is a multiple return.
+    # NOTE: This is a multiple return.
     return archive_dir, archive_util.ArchiveCompress(data,
         directory=archive_dir)
 
@@ -221,7 +221,7 @@ class Archive(webapp.RequestHandler):
           reporting errors.
        No new exceptions generated here.
     """
-    #TODO(mdw) Unit test needed.
+    # TODO(mdw) Unit test needed.
     try:
       archive_dir, archive_data = self._Archive()
       self.response.headers['Content-Type'] = config.ARCHIVE_CONTENT_TYPE
@@ -232,12 +232,12 @@ class Archive(webapp.RequestHandler):
       logging.exception(e)
       self.response.clear()
       self.response.set_status(500)
-      #NOTE: if you see this error make sure it is run on a backend instance.
+      # NOTE: if you see this error make sure it is run on a backend instance.
       self.response.headers['Content-Type'] = 'application/json'
       self.response.out.write(('{\'status\':500,  \'error_name\':\'%s\', '
           '\'error_value\':\'%s\'}' % ('DeadlineExceededError', e)))
 
-    #TODO(gavaletz) log the archive request
+    # TODO(gavaletz) log the archive request
     # Consider saving the file to GS too so that it can be returned from there
     # if requested again in the future.
 
@@ -260,45 +260,49 @@ class Archive(webapp.RequestHandler):
           reporting errors.
        No new exceptions generated here.
     """
-    #TODO(mdw) Unit test needed.
-    try:
-      archive_dir, archive_data = self._Archive()
+    # TODO(mdw) Unit test needed.
+    gs_archive_names = []
+    for anonymize in (True, False):
+      try:
+        archive_dir, archive_data = self._Archive()
 
-      anonymize = self.request.get('anonymize')
-      anonymize = not not anonymize
+        # anonymize = self.request.get('anonymize')
+        # anonymize = not not anonymize
 
-      # Create the file
-      if not anonymize:
-        bucket = config_private.ARCHIVE_GS_BUCKET
-        acl = config_private.ARCHIVE_GS_ACL
-      else:
-        bucket = config.ARCHIVE_GS_BUCKET_PUBLIC
-        acl = config.ARCHIVE_GS_ACL_PUBLIC
+        # Create the file
+        if not anonymize:
+          bucket = config_private.ARCHIVE_GS_BUCKET
+          acl = config_private.ARCHIVE_GS_ACL
+        else:
+          bucket = config.ARCHIVE_GS_BUCKET_PUBLIC
+          acl = config.ARCHIVE_GS_ACL_PUBLIC
 
-      gs_archive_name = '/gs/%s/%s.zip' % (bucket, archive_dir)
-      gs_archive = files.gs.create(gs_archive_name,
-          mime_type=config.ARCHIVE_CONTENT_TYPE, acl=acl,
-          content_disposition=(
-              config.ARCHIVE_CONTENT_DISPOSITION_BASE % archive_dir))
+        gs_archive_name = '/gs/%s/%s.zip' % (bucket, archive_dir)
+        gs_archive = files.gs.create(gs_archive_name,
+            mime_type=config.ARCHIVE_CONTENT_TYPE, acl=acl,
+            content_disposition=(
+                config.ARCHIVE_CONTENT_DISPOSITION_BASE % archive_dir))
 
-      # Open the file and write the data.
-      with files.open(gs_archive, 'a') as f:
-        f.write(archive_data)
+        # Open the file and write the data.
+        with files.open(gs_archive, 'a') as f:
+          f.write(archive_data)
 
-      # Finalize (a special close) the file.
-      files.finalize(gs_archive)
-      self.response.headers['Content-Type'] = 'application/json'
-      self.response.out.write('{\'status\':200,  \'archive_name\':\'%s\'}' %
-          gs_archive_name)
-    except DeadlineExceededError, e:
-      logging.exception(e)
-      self.response.clear()
-      self.response.set_status(500)
-      #NOTE: if you see this error make sure it is run on a backend instance.
-      self.response.headers['Content-Type'] = 'application/json'
-      self.response.out.write(('{\'status\':500,  \'error_name\':\'%s\', '
-          '\'error_value\':\'%s\'}' % ('DeadlineExceededError', e)))
+        # Finalize (a special close) the file.
+        files.finalize(gs_archive)
+        gs_archive_names.append(gs_archive_name)
+      except DeadlineExceededError, e:
+        logging.exception(e)
+        self.response.clear()
+        self.response.set_status(500)
+        # NOTE: if you see this error make sure it is run on a backend instance.
+        self.response.headers['Content-Type'] = 'application/json'
+        self.response.out.write(('{\'status\':500,  \'error_name\':\'%s\', '
+            '\'error_value\':\'%s\'}' % ('DeadlineExceededError', e)))
 
-    #TODO(gavaletz) create a datastore entry for the archive params, md5, etc.
+    self.response.headers['Content-Type'] = 'application/json'
+    self.response.out.write('{\'status\':200,  \'archive_name\':\'%s\'}' %
+            ", ".join(gs_archive_names))
+
+    # TODO(gavaletz) create a datastore entry for the archive params, md5, etc.
     # location might be a gs bucket, someone who downloaded it etc.
     # with this data we do not have to do things twice.
