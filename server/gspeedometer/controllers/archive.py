@@ -54,7 +54,7 @@ import logging
 
 
 def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
-                           limit=config.QUERY_FETCH_LIMIT):
+                           limit=config.QUERY_FETCH_LIMIT_LARGE):
   """Retrieves device measurements from the datastore.
 
   This is factored out to allow for future growth and diversification is what
@@ -91,7 +91,7 @@ def GetMeasurementDictList(device_id, start=None, end=None, anonymize=False,
   if end:
     measurement_q.filter('timestamp <', end)
   measurement_q.order('timestamp')
-  measurement_list = measurement_q.fetch(config.QUERY_FETCH_LIMIT)
+  measurement_list = measurement_q.fetch(limit)
   # NOTE: this is inefficient and should iterate over a query instead of a list.
   # There is a TODO for this in util.MeasurementListToDictList().
   return util.MeasurementListToDictList(measurement_list, include_fields,
