@@ -723,7 +723,7 @@ public class MeasurementScheduler extends Service {
       Vector<MeasurementTask> tasksToAdd = new Vector<MeasurementTask>();
 
       // Keep track of what keys are not being used
-      Set<String> scheduleKeys = currentSchedule.keySet();
+      Set<String> scheduleKeys = new HashSet<String>(currentSchedule.keySet());
       Set<String> keysToRemove = new HashSet<String>();
       Logger.i("Attempting to add new tasks");
      
@@ -739,8 +739,7 @@ public class MeasurementScheduler extends Service {
             tasksToAdd.add(newTask);            
           }          
           scheduleKeys.remove(newKey);         
-        }
-        
+        }        
       }
       
       // scheduleKeys now contain all keys that do not exist
@@ -756,6 +755,7 @@ public class MeasurementScheduler extends Service {
         if (!keysToRemove.contains(taskKey)) {
           newQueue.add(task);
         } else {          
+          Logger.w("Removing task with key" + taskKey);
           currentSchedule.remove(taskKey);
         }
       }
