@@ -155,6 +155,8 @@ public class MeasurementScheduler extends Service {
             new TaskComparator());
     this.pendingTasks =
         new ConcurrentHashMap<MeasurementTask, Future<MeasurementResult>>();
+    // expect it to be the same size as the queue
+    this.currentSchedule = new Hashtable<String, MeasurementTask>(Config.MAX_TASK_QUEUE_SIZE);
 
     this.notificationManager =
         (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
@@ -723,6 +725,7 @@ public class MeasurementScheduler extends Service {
       // Keep track of what keys are not being used
       Set<String> scheduleKeys = currentSchedule.keySet();
       Set<String> keysToRemove = new HashSet<String>();
+      Logger.i("Attempting to add new tasks");
      
       for (MeasurementTask newTask: newTasks) {
         String newKey = newTask.getDescription().key;
@@ -746,6 +749,8 @@ public class MeasurementScheduler extends Service {
       // remove all bad tasks from the queue and schedule
       PriorityBlockingQueue<MeasurementTask> newQueue = new PriorityBlockingQueue<MeasurementTask>(Config.MAX_TASK_QUEUE_SIZE,
           new TaskComparator());
+
+      Logger.i("Tasks to remove:" + keysToRemove.size());
       for (MeasurementTask task: this.taskQueue) {
         String taskKey = task.getDescription().key;
         if (!keysToRemove.contains(taskKey)) {
@@ -755,8 +760,8 @@ public class MeasurementScheduler extends Service {
         }
       }
       this.taskQueue = newQueue;
-      
       // add all new tasks
+      Logger.i("New tasks added:" + tasksToAdd.size());
       for (MeasurementTask task: tasksToAdd) {
         this.taskQueue.add(task);
         currentSchedule.put(task.getDescription().key, task);

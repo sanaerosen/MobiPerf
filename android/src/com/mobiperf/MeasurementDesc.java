@@ -99,11 +99,10 @@ public abstract class MeasurementDesc {
   @Override
   public boolean equals(Object obj) {
     if (!(obj instanceof MeasurementDesc)) return false;
+    
     MeasurementDesc otherDesc = (MeasurementDesc) obj;
-    if (this.type != otherDesc.type) return false;
-    if (this.key != otherDesc.type) return false;
-    if (this.startTime != otherDesc.startTime) return false;
-    if (this.endTime != otherDesc.endTime) return false;
+    if (!this.type.equals(otherDesc.type)) return false;
+    if (!this.key.equals(otherDesc.key)) return false;
     if (this.intervalSec != otherDesc.intervalSec) return false;
     if (this.count != otherDesc.count) return false;
     if (this.priority != otherDesc.priority) return false;
