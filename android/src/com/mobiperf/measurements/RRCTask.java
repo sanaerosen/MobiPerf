@@ -879,7 +879,7 @@ public class RRCTask extends MeasurementTask {
       return;
     }
     for (int i = 0; i < times.length; i++) {
-      for (int j = desc.sizeGranularity; j <= 1024; j += desc.sizeGranularity) {
+      for (int j = desc.sizeGranularity; j <= desc.MAX; j += desc.sizeGranularity) {
         try {
           long result =
               inferDemotionPacketSize(serverAddr, times[i], desc, j);
