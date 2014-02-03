@@ -347,7 +347,7 @@ class RRCInferenceRawData(db.Model):
   """Represents the RRC State model information gathred from the client 
      directly"""
   username = db.UserProperty()
-  #device IMEI number
+  # device IMEI number
   phone_id = db.StringProperty()
 
   test_id = db.IntegerProperty()
@@ -368,7 +368,7 @@ class RRCInferenceSizesRawData(db.Model):
   """Represents the data collected on the relationship between round-trip 
      times and packet sizes for different RRC states"""
   username = db.UserProperty()
-  #device IMEI number
+  # device IMEI number
   phone_id = db.StringProperty()
 
   test_id = db.IntegerProperty()
@@ -378,4 +378,18 @@ class RRCInferenceSizesRawData(db.Model):
   time_delay = db.IntegerProperty()
   result = db.IntegerProperty()
   size = db.IntegerProperty()
+  
+# class TaskProfile(db.Model):
+#   """Represents a frequency values for four profiles for each measurement task"""
+# 
+#   # Measurement type
+# #   task = db.ReferenceProperty(Task, required=True)
+#   task = db.ReferenceProperty(Task)
+#   p1_freq = db.IntegerProperty()
+#   p2_freq = db.IntegerProperty()
+#   p3_freq = db.IntegerProperty()
+#   p4_freq = db.IntegerProperty()
+  
+  
+  
 

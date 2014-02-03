@@ -206,10 +206,10 @@ public class Checkin {
    * Sent as a separate call because the data is formatted in a different, 
    * more complicated way than other measurement tasks.
    * 
-   * @param data
+   * @param data Contains data to upload
    * @throws IOException
    */
-  public void uploadRrcInferenceData(RRCTask.RrcTestData data) throws IOException {
+  public void uploadRrcInferenceData(RRCTask.RRCTestData data) throws IOException {
     DeviceInfo info = phoneUtils.getDeviceInfo();
     String network_id = phoneUtils.getNetwork();
     String[] parameters = data.toJSON(network_id, info.deviceId);
@@ -232,9 +232,9 @@ public class Checkin {
   /**
    * Impact of packet sizes on rrc inference results.
    * 
-   * @param sizeData
+   * @param sizeData Contains data to upload
    */
-  public void uploadRrcInferenceSizeData(RRCTask.RrcTestData sizeData) {
+  public void uploadRrcInferenceSizeData(RRCTask.RRCTestData sizeData) {
     DeviceInfo info = phoneUtils.getDeviceInfo();
     String network_id = phoneUtils.getNetwork();
     String[] sizeParameters =
