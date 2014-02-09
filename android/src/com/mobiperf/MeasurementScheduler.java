@@ -28,7 +28,12 @@ import android.os.Binder;
 import android.os.IBinder;
 import android.preference.PreferenceManager;
 
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.Writer;
@@ -54,6 +59,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.PriorityBlockingQueue;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import com.google.myjson.reflect.TypeToken;
 import com.mobiperf.BatteryCapPowerManager.DataUsageProfile;
@@ -150,7 +159,6 @@ public class MeasurementScheduler extends Service {
 
     this.pauseRequested = true;
     this.stopRequested = false;
-
     this.measurementExecutor = Executors.newSingleThreadExecutor();
     this.taskQueue =
         new PriorityBlockingQueue<MeasurementTask>(Config.MAX_TASK_QUEUE_SIZE,
@@ -207,7 +215,13 @@ public class MeasurementScheduler extends Service {
             if (intent.getStringExtra(UpdateIntent.ERROR_STRING_PAYLOAD) != null) {
               failedMeasurementCnt++;
             } else {
+              // Process result
               completedMeasurementCnt++;
+            }
+            if (intent.getStringExtra(UpdateIntent.RESULT_PAYLOAD) != null) {
+              saveResultToFile(intent
+                  .getStringExtra(UpdateIntent.RESULT_PAYLOAD));
+
             }
             updateResultsConsole(intent);
           }
@@ -334,12 +348,12 @@ public class MeasurementScheduler extends Service {
 
         MeasurementDesc desc = task.getDescription();
 
-        // The RRC task should run no more than once an hour.
+        /*// The RRC task should run no more than once an hour.
         // It can take a long time to run, due to all the pauses.
         if (desc.type == "rrc" && desc.intervalSec <= 3600) {
           desc.intervalSec = 3600;
           Logger.i("Interval set too long for rrc task, setting to one hour");
-        }
+        }*/
 
         long newStartTime =
             desc.startTime.getTime() + (long) desc.intervalSec * 1000;
@@ -623,11 +637,11 @@ public class MeasurementScheduler extends Service {
 
       int prevDataLimit = powerManager.getDataLimit();
       powerManager.setDataUsageLimit(prefs.getString(
-          getString(R.string.dataLimitPrefKey), "No limit"));
+          getString(R.string.dataLimitPrefKey), "250 MB"));
       int newDataLimit = powerManager.getDataLimit();
-      if (prevDataLimit != newDataLimit) {
-        powerManager.resetDataUsaage();
-      }
+      //if (prevDataLimit != newDataLimit) {
+      //  powerManager.resetDataUsage();
+      //}
 
       this.setCheckinInterval(Integer.parseInt(prefs.getString(
           getString(R.string.checkinIntervalPrefKey),
@@ -703,74 +717,78 @@ public class MeasurementScheduler extends Service {
       return;
     }
     checkin.getCookie();
-    List<MeasurementTask> tasksFromServer = checkin.checkin();
+    List<MeasurementTask> tasksFromServer = checkin.checkin(powerManager);
 
-    updateSchedule(tasksFromServer);
+    updateSchedule(tasksFromServer, false);
 
-    /*for (MeasurementTask task : tasksFromServer) {
-      Logger.i("added task: " + task.toString());
-      this.submitTask(task);
-    }*/
   }
 
-/**
- * Adjusts the frequency of the task based on the profile passed from the server.
- * 
- * Alternately, disregards the task altogether, if a -1 is passed. 
- * 
- * @param task The task to adjust
- * @return false if the task is to be ignored
- */
+  /**
+   * Adjusts the frequency of the task based on the profile passed from the server.
+   * 
+   * Alternately, disregards the task altogether, if a -1 is passed.
+   * 
+   * @param task The task to adjust
+   * @return false if the task is to be ignored
+   */
   private boolean adjustInterval(MeasurementTask task) {
-    
+
     Map<String, String> params = task.getDescription().parameters;
     float adjust = 1; // default
     if (params.containsKey("profile_1_freq")
         && powerManager.getDataUsageProfile() == DataUsageProfile.PROFILE1) {
-      adjust = Float.parseFloat(params.get("profile_1_freq"));  
-      Logger.i("Task " + task.getDescription().key + " adjusted using profile 1");
+      adjust = Float.parseFloat(params.get("profile_1_freq"));
+      Logger.i("Task " + task.getDescription().key
+          + " adjusted using profile 1");
     } else if (params.containsKey("profile_2_freq")
         && powerManager.getDataUsageProfile() == DataUsageProfile.PROFILE2) {
-      adjust = Float.parseFloat(params.get("profile_2_freq"));  
-      Logger.i("Task " + task.getDescription().key + " adjusted using profile 2");    
+      adjust = Float.parseFloat(params.get("profile_2_freq"));
+      Logger.i("Task " + task.getDescription().key
+          + " adjusted using profile 2");
     } else if (params.containsKey("profile_3_freq")
         && powerManager.getDataUsageProfile() == DataUsageProfile.PROFILE3) {
       adjust = Float.parseFloat(params.get("profile_3_freq"));
-      Logger.i("Task " + task.getDescription().key + " adjusted using profile 3");
+      Logger.i("Task " + task.getDescription().key
+          + " adjusted using profile 3");
     } else if (params.containsKey("profile_4_freq")
         && powerManager.getDataUsageProfile() == DataUsageProfile.PROFILE4) {
       adjust = Float.parseFloat(params.get("profile_4_freq"));
-      Logger.i("Task " + task.getDescription().key + " adjusted using profile 4");
+      Logger.i("Task " + task.getDescription().key
+          + " adjusted using profile 4");
     } else if (params.containsKey("profile_unlimited")
         && powerManager.getDataUsageProfile() == DataUsageProfile.UNLIMITED) {
       adjust = Float.parseFloat(params.get("profile_unlimited"));
-      Logger.i("Task " + task.getDescription().key + " adjusted using unlimited profile");
+      Logger.i("Task " + task.getDescription().key
+          + " adjusted using unlimited profile");
     }
     if (adjust <= 0) {
       Logger.i("Task " + task.getDescription().key + "marked for removal");
       return false;
-    }    
+    }
     task.getDescription().intervalSec *= adjust;
     task.getDescription().updateStartTime(); // Needed because the start time is set on creation
     return true;
-    
+
   }
 
-  /**
-   * For the new set of tasks:
-   * 
-   * @param newTasks
-   */
-  private void updateSchedule(List<MeasurementTask> newTasks) {
-    /**
-     * Design: Have a structure with keys pointing to tasks. Go through new list. Do the following:
-     * - Compare sets of keys. Remove tasks whose keys are gone, add tasks whose keys are new. - For
-     * all tasks, compare parameters. If parameters are different, remove and add the new task. Add
-     * tasks back into the queue
-     * 
-     * Currently, any changes to server-side parameters get updated immediately, otherwise
-     * 
-     */
+/**
+ * Update the schedule based on a set of tasks from the server.
+ * <p>
+ * The current tasks to schedule are in a hash table indexed by a unique task key.
+ * <p>
+ * Remove all tasks from the schedule that are not in the new list or that have changed.
+ * Then, add all tasks from the new list that were not in the schedule, or have changed.
+ * Then, the schedule will match the one in the server, and unchanged tasks are left as they are.
+ * 
+ * <p>
+ * If the state has changed and the schedule was received from the server, save it to disk
+ * so it can be recovered in case of a crash. 
+ * 
+ * @param newTasks List of MeasurementTasks from the server
+ * @param reLoad if it's True, we're loading from disk: don't adjust frequencies or save to disk.
+ */
+  private void updateSchedule(List<MeasurementTask> newTasks, boolean reLoad) {
+
     // Keep track of what tasks to change
     Vector<MeasurementTask> tasksToAdd = new Vector<MeasurementTask>();
 
@@ -780,12 +798,16 @@ public class MeasurementScheduler extends Service {
     Logger.i("Attempting to add new tasks");
 
     for (MeasurementTask newTask : newTasks) {
-      
+
       // Adjust the frequency of the new task, or ignore it if requested.
-      if (!adjustInterval(newTask)) {
-        continue;
+      // If we are loading again, don't re-adjust task frequencies.
+      if (!reLoad) {
+        if (!adjustInterval(newTask)) {
+          continue;
+        }
+
       }
-      
+
       String newKey = newTask.getDescription().key;
       if (!scheduleKeys.contains(newKey)) {
         tasksToAdd.add(newTask);
@@ -808,30 +830,196 @@ public class MeasurementScheduler extends Service {
         new PriorityBlockingQueue<MeasurementTask>(Config.MAX_TASK_QUEUE_SIZE,
             new TaskComparator());
 
-    Logger.i("Tasks to remove:" + keysToRemove.size());
-    for (MeasurementTask task : this.taskQueue) {
-      String taskKey = task.getDescription().key;
-      if (!keysToRemove.contains(taskKey)) {
-        newQueue.add(task);
-      } else {
-        Logger.w("Removing task with key" + taskKey);
-        currentSchedule.remove(taskKey);
+    synchronized (currentSchedule) {
+      Logger.i("Tasks to remove:" + keysToRemove.size());
+      for (MeasurementTask task : this.taskQueue) {
+        String taskKey = task.getDescription().key;
+        if (!keysToRemove.contains(taskKey)) {
+          newQueue.add(task);
+        } else {
+          Logger.w("Removing task with key" + taskKey);
+          currentSchedule.remove(taskKey);
+        }
+      }
+      this.taskQueue = newQueue;
+      // add all new tasks
+      Logger.i("New tasks added:" + tasksToAdd.size());
+      for (MeasurementTask task : tasksToAdd) {
+        submitTask(task);
+        currentSchedule.put(task.getDescription().key, task);
       }
     }
-    this.taskQueue = newQueue;
-    // add all new tasks
-    Logger.i("New tasks added:" + tasksToAdd.size());
-    for (MeasurementTask task : tasksToAdd) {
-      submitTask(task);
-      currentSchedule.put(task.getDescription().key, task);
+
+    if (!reLoad && (!tasksToAdd.isEmpty() || !keysToRemove.isEmpty())) {
+      saveSchedulerState();
+    }
+
+  }
+
+  /**
+   * Save the results of a task to a file, for later uploading.
+   * 
+   * @param result A string from the JSON representation of a result
+   */
+  private synchronized void saveResultToFile(String result) {
+    try {
+      Logger.i("Saving result to file...");
+      // Logger.i(result);
+      BufferedOutputStream writer =
+          new BufferedOutputStream(openFileOutput("results",
+              Context.MODE_PRIVATE | Context.MODE_APPEND));
+      // JSONObject jsonResult = MeasurementJsonConvertor.encodeToJson(string);
+      // writer.write(jsonResult.toString().getBytes());
+      result += "\n";
+      writer.write(result.getBytes());
+      writer.close();
+    } catch (FileNotFoundException e) {
+      e.printStackTrace();
+    } catch (IOException e) {
+      e.printStackTrace();
     }
   }
 
+  /**
+   * Read in the results of tasks completed to date from a file, then clear the file.
+   * 
+   * @return The results as a JSONArray, ready for sending to the server.
+   */
+  private synchronized JSONArray readResultsFromFile() {
+
+    JSONArray results = new JSONArray();
+    try {
+      Logger.i("Loading results from disk");
+      FileInputStream inputstream = openFileInput("results");
+      InputStreamReader streamreader = new InputStreamReader(inputstream);
+      BufferedReader bufferedreader = new BufferedReader(streamreader);
+
+      String line;
+      while ((line = bufferedreader.readLine()) != null) {
+        JSONObject jsonTask;
+        try {
+          jsonTask = new JSONObject(line);
+          // Logger.i(line);
+          // Logger.i(jsonTask.toString());
+          results.put(jsonTask);
+        } catch (JSONException e) {
+          e.printStackTrace();
+        }
+      }
+
+      bufferedreader.close();
+      streamreader.close();
+      inputstream.close();
+
+      // delete file once done
+      deleteFile("results");
+
+
+    } catch (FileNotFoundException e) {
+      e.printStackTrace();
+    } catch (IOException e) {
+      e.printStackTrace();
+    }
+    return results;
+  }
+
+  /**
+   * Save the entire current schedule to a file, in JSON format, like how
+   * tasks are recieved from the server.
+   * 
+   * One item per line.
+   */
+  private void saveSchedulerState() {
+    synchronized (currentSchedule) {
+      try {
+        BufferedOutputStream writer =
+            new BufferedOutputStream(openFileOutput("schedule",
+                Context.MODE_PRIVATE));
+
+        Logger.i("Saving schedule to disk...");
+        for (Map.Entry<String, MeasurementTask> entry : currentSchedule
+            .entrySet()) {
+          try {
+            JSONObject task =
+                MeasurementJsonConvertor.encodeToJson(entry.getValue()
+                    .getDescription());
+            String taskstring = task.toString() + "\n";
+            writer.write(taskstring.getBytes());
+          } catch (JSONException e) {
+            e.printStackTrace();
+          }
+        }
+        writer.close();
+      } catch (FileNotFoundException e) {
+        e.printStackTrace();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
+  }
+
+  /**
+   * Load the schedule from the schedule file, if it exists.
+   * 
+   * This is to be run when the app first starts up, so scheduled items
+   * are not lost.
+   */
+  private void loadSchedulerState() {
+    Vector<MeasurementTask> tasksToAdd = new Vector<MeasurementTask>();
+    synchronized (currentSchedule) {
+      try {
+        Logger.i("Restoring schedule from disk...");
+        FileInputStream inputstream = openFileInput("schedule");
+        InputStreamReader streamreader = new InputStreamReader(inputstream);
+        BufferedReader bufferedreader = new BufferedReader(streamreader);
+
+        String line;
+        while ((line = bufferedreader.readLine()) != null) {
+          JSONObject jsonTask;
+          try {
+            jsonTask = new JSONObject(line);
+            MeasurementTask newTask =
+                MeasurementJsonConvertor.makeMeasurementTaskFromJson(jsonTask,
+                    getApplicationContext());
+            // If the task is scheduled in the past, re-schedule it in the future
+            
+            long curtime = System.currentTimeMillis();
+            if (curtime > newTask.getDescription().startTime.getTime()) {
+                long timediff = curtime - newTask.getDescription().startTime.getTime();               
+                
+                timediff = (long) (timediff % (newTask.getDescription().intervalSec * 1000));
+                Calendar now = Calendar.getInstance();
+                now.add(Calendar.SECOND, (int) timediff/1000);
+                newTask.getDescription().startTime.setTime(now.getTimeInMillis());
+                Logger.i("Rescheduled task " + newTask.getDescription().key + 
+                    " at time " + now.getTimeInMillis());
+            }
+            
+            tasksToAdd.add(newTask);
+          } catch (JSONException e) {
+            e.printStackTrace();
+          }
+        }
+        bufferedreader.close();
+        streamreader.close();
+        inputstream.close();
+
+      } catch (FileNotFoundException e) {
+        e.printStackTrace();
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+    }
+    updateSchedule(tasksToAdd, true);
+  }
+
+
   @SuppressWarnings("unchecked")
   private void uploadResults() {
-    Vector<MeasurementResult> finishedTasks = new Vector<MeasurementResult>();
+    // Vector<MeasurementResult> finishedTasks = new Vector<MeasurementResult>();
     MeasurementResult result;
     Future<MeasurementResult> future;
+    JSONArray results = readResultsFromFile();
 
     synchronized (this.pendingTasks) {
       try {
@@ -842,14 +1030,18 @@ public class MeasurementScheduler extends Service {
             if (future.isDone()) {
               try {
                 this.pendingTasks.remove(task);
+
                 if (!future.isCancelled()) {
                   result = future.get();
-                  finishedTasks.add(result);
                 } else {
                   Logger.e("Task execution was canceled");
-                  finishedTasks.add(this.getFailureResult(task,
-                      new CancellationException("Task cancelled")));
+                  JSONObject cancelledResult =
+                      MeasurementJsonConvertor.encodeToJson(this
+                          .getFailureResult(task, new CancellationException(
+                              "Task cancelled")));
+                  results.put(cancelledResult);
                 }
+
               } catch (InterruptedException e) {
                 Logger.e("Task execution interrupted", e);
               } catch (ExecutionException e) {
@@ -863,7 +1055,8 @@ public class MeasurementScheduler extends Service {
                   sendStringMsg("Task failed - " + e.getCause().toString()
                       + "\n" + task);
                   Logger.e("Task execution failed", e.getCause());
-                  finishedTasks.add(this.getFailureResult(task, e.getCause()));
+                  // Was already sent
+                  // finishedTasks.add(this.getFailureResult(task, e.getCause()));
                 }
               } catch (CancellationException e) {
                 Logger.e("Task cancelled", e);
@@ -875,8 +1068,11 @@ public class MeasurementScheduler extends Service {
                */
               this.pendingTasks.remove(task);
               future.cancel(true);
-              finishedTasks.add(this.getFailureResult(task,
-                  new RuntimeException("Deadline passed before execution")));
+              JSONObject cancelledResult =
+                  MeasurementJsonConvertor.encodeToJson(this.getFailureResult(
+                      task, new RuntimeException(
+                          "Deadline passed before execution")));
+              results.put(cancelledResult);
             }
           }
 
@@ -885,8 +1081,11 @@ public class MeasurementScheduler extends Service {
              * Tasks that are scheduled after deadline are put into pendingTasks with a null future.
              */
             this.pendingTasks.remove(task);
-            finishedTasks.add(this.getFailureResult(task, new RuntimeException(
-                "Task scheduled after deadline")));
+            JSONObject cancelledResult =
+                MeasurementJsonConvertor.encodeToJson(this
+                    .getFailureResult(task, new RuntimeException(
+                        "Task scheduled after deadline")));
+            results.put(cancelledResult);
           }
         }
       } catch (ConcurrentModificationException e) {
@@ -896,19 +1095,21 @@ public class MeasurementScheduler extends Service {
          * this should not happen.
          */
         Logger.e("Pending tasks is changed during measurement upload");
+      } catch (JSONException e) {
+        e.printStackTrace();
       }
     }
 
-    if (finishedTasks.size() > 0) {
+    if (results.length() > 0) {
       try {
-        this.checkin.uploadMeasurementResult(finishedTasks);
+        this.checkin.uploadMeasurementResult(results, powerManager);
       } catch (IOException e) {
         Logger.e("Error when uploading message");
       }
     }
 
-    Logger.i("A total of " + finishedTasks.size() + " uploaded");
-    Logger.i("A total of " + this.pendingTasks.size() + " is in pendingTasks");
+    Logger.i("A total of " + results.length() + " uploaded");
+    Logger.i("A total of " + results.length() + " is in the results list");
   }
 
   private class CheckinTask implements Runnable {
@@ -974,6 +1175,13 @@ public class MeasurementScheduler extends Service {
 
   private MeasurementResult getFailureResult(MeasurementTask task,
       Throwable error) {
+      
+    try {
+        powerManager.updateDataUsage(BatteryCapPowerManager.PHONEUTILCOST);
+    } catch (IOException e) {
+        e.printStackTrace();
+    }
+    
     MeasurementResult result =
         new MeasurementResult(phoneUtils.getDeviceInfo().deviceId,
             phoneUtils.getDeviceProperty(), task.getType(),
@@ -1071,6 +1279,7 @@ public class MeasurementScheduler extends Service {
     Logger.d("Service restoreState called");
     initializeConsoles();
     restoreStats();
+    loadSchedulerState();
   }
 
 

@@ -41,7 +41,7 @@ public class DnsLookupTask extends MeasurementTask {
   // Human readable name for the task
   public static final String DESCRIPTOR = "DNS lookup";
   
-  public static final int AVG_DATA_USAGE_BYTE=250;
+  public static final int AVG_DATA_USAGE_BYTE=2000;
 
   /**
    * The description of DNS lookup measurement 
@@ -164,4 +164,10 @@ public class DnsLookupTask extends MeasurementTask {
   public void stop() {
     //There is nothing we need to do to stop the DNS measurement
   }
+
+    @Override
+    public long getDataConsumed() {
+        // TODO figure out how to calculate
+        return AVG_DATA_USAGE_BYTE;
+    }
 }
