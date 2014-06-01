@@ -163,6 +163,12 @@ m.connect('/anonymous/rrc/uploadRRCInference',
             controller='RRCstates:RRCStates',
             action='uploadRRCInference')
 
+
+# visualize data
+m.connect('/visualization',
+        controller='visualize:Visualize',
+        action='Visualize')
+
 # For backend instance, give it something that won't
 # return a 500 error.
 m.connect('/_ah/start',
