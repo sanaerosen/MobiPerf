@@ -178,13 +178,17 @@ class Archive(webapp.RequestHandler):
     if start_time:
       start = util.MicrosecondsSinceEpochToTime(int(start_time))
     else:
-      d0 = datetime.datetime.today() - datetime.timedelta(days=1)
-      start = datetime.datetime(d0.year, d0.month, d0.day, 0, 0, 0, 0)
+      d0 = datetime.datetime.today() - datetime.timedelta(hours=6)
+      hour = (d0.hour - 6) % 24
+      day = d0.day
+      if d0.hour < 6:
+        day -= 1
+      start = datetime.datetime(d0.year, d0.month, day, hour, 0, 0, 0)
     if end_time:
       end = util.MicrosecondsSinceEpochToTime(int(end_time))
     else:
-      d0 = datetime.datetime.today() - datetime.timedelta(days=1)
-      end = datetime.datetime(d0.year, d0.month, d0.day, 23, 59, 59, 999999)
+      d0 = datetime.datetime.today() - datetime.timedelta(hours=6)
+      end = datetime.datetime(d0.year, d0.month, d0.day, d0.hour, 59, 59, 999999)
     anonymize = not not anonymize
     # Use limit if specified, otherwise use default limit
     if limit is None:
